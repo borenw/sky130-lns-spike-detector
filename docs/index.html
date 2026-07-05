@@ -50,6 +50,7 @@ tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
 td.hl{color:var(--accent);font-weight:600}
 td.delta{color:var(--ink2);font-weight:600}
 tbody tr.misrow{background:rgba(227,73,72,.09)}
+tbody tr.usedrow{background:rgba(42,120,214,.11)}
 .bad{color:#d03b3b;font-weight:700}
 .ok2{color:var(--good);font-weight:600}
 .note{color:var(--ink2);font-size:13.5px;max-width:78ch}
@@ -128,9 +129,9 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   <div class="tablescroll">
   <table>
     <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>V<sub>th</sub></th>
-      <th>S = A·B+C·D</th><th>Ŝ (K=1)</th><th>err %</th><th>V̂ (K=1)</th>
+      <th>S = A·B+C·D</th><th>A·B−C·D</th><th>Ŝ (K=1)</th><th>err %</th><th>V̂ (K=1)</th>
       <th>out<br>exact</th><th>out<br>K=1</th><th>verdict</th></tr></thead>
-    <tbody><tr><td>25</td><td>30</td><td>12</td><td>40</td><td>600</td><td>1230</td><td>1024</td><td>-16.7%</td><td>512</td><td>1</td><td class='hl'>1</td><td><span class="ok2">match ✓</span></td></tr><tr><td>8</td><td>8</td><td>5</td><td>5</td><td>150</td><td>89</td><td>91</td><td>+1.7%</td><td>128</td><td>0</td><td class='hl'>0</td><td><span class="ok2">match ✓</span></td></tr><tr><td>50</td><td>50</td><td>20</td><td>20</td><td>2000</td><td>2900</td><td>2048</td><td>-29.4%</td><td>1448</td><td>1</td><td class='hl'>1</td><td><span class="ok2">match ✓</span></td></tr><tr class="misrow"><td>3</td><td>3</td><td>3</td><td>3</td><td>17</td><td>18</td><td>16</td><td>-11.1%</td><td>16</td><td>1</td><td class='hl'>0</td><td><span class="bad">misjudge ✗</span></td></tr></tbody>
+    <tbody><tr><td>25</td><td>30</td><td>12</td><td>40</td><td>600</td><td>1230</td><td>270</td><td>1024</td><td>-16.7%</td><td>512</td><td>1</td><td class='hl'>1</td><td><span class="ok2">match ✓</span></td></tr><tr><td>8</td><td>8</td><td>5</td><td>5</td><td>150</td><td>89</td><td>39</td><td>91</td><td>+1.7%</td><td>128</td><td>0</td><td class='hl'>0</td><td><span class="ok2">match ✓</span></td></tr><tr><td>50</td><td>50</td><td>20</td><td>20</td><td>2000</td><td>2900</td><td>2100</td><td>2048</td><td>-29.4%</td><td>1448</td><td>1</td><td class='hl'>1</td><td><span class="ok2">match ✓</span></td></tr><tr class="misrow"><td>3</td><td>3</td><td>3</td><td>3</td><td>17</td><td>18</td><td>0</td><td>16</td><td>-11.1%</td><td>16</td><td>1</td><td class='hl'>0</td><td><span class="bad">misjudge ✗</span></td></tr></tbody>
   </table>
   </div>
   <p class="note"><b>The last row misjudges.</b> S = 18 sits just above V<sub>th</sub> = 17, but
@@ -139,6 +140,45 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   third row carries a far larger −29% error yet still decides correctly: the approximation only
   flips the result when it <em>straddles</em> the threshold — which is why the overall
   disagreement is ~5.6% and concentrates near mid-range V<sub>th</sub>.</p>
+</section>
+
+<section>
+  <h2>Step-by-step — the LNS add for row 1 (C·D = 12·40)</h2>
+  <p class="note">Exactly what the multiplier-free path does for worked-example row 1
+  (A=25, B=30, C=12, D=40): leading-one-detector log conversion (<code>lod5.v</code>),
+  log-add = multiply, then the LNS add (<code>lns_add.v</code>) with the F ROM
+  (<code>lns_ftable.v</code>). Logs are in half-log₂ units (integer 2·log₂).</p>
+  <div class="deriv"><pre>  A=25  B=30  C=12  D=40   (Vth=600)        logs in half-log2 units
+
+  1) log-convert   L(v) = 2*floor(log2 v) + (next bit below the leading 1)
+       L(25) = 2*4 + 1 = 9        25 = 11001b
+       L(30) = 2*4 + 1 = 9        30 = 11110b
+       L(12) = 2*3 + 1 = 7        12 = 1100b
+       L(40) = 2*5 + 0 = 10       40 = 101000b
+
+  2) multiply = add the logs   (adding logs multiplies the operands)
+       X = L(25)+L(30) = 18      -&gt;  A*B ~ 2^(9) = 512     (true 750)
+       Y = L(12)+L(40) = 17      -&gt;  C*D ~ 2^(8.5) = 362     (true 480)
+
+  3) LNS add   (combine the two products, still in the log domain)
+       d = |X - Y| = |18 - 17| = 1
+       F(d) = ROM[1] = 2                         &lt;-- the one table lookup
+       s = max(X,Y) + F(d) = 18 + 2 = 20
+
+  4) result    S_hat = 2^(10) = 1024              (true A*B+C*D = 1230,  err -16.7%)
+
+  5) compare   Lv = L(600) = 18  -&gt;  V_hat = 512
+       s=20 &gt; Lv=18   -&gt;  out = 1       (exact: 1230 &gt; 600 -&gt; 1)   match</pre></div>
+  <p class="note">The whole LNS add costs just <b>one table lookup</b> — <code>F(d)</code> at
+  key <b>d = |X − Y| = 1</b>. Here is that slice of the actual ROM
+  (<code>lns_ftable.v</code>) — the used key highlighted, with its neighbors:</p>
+  <div class="tablescroll" style="display:inline-block;max-width:100%">
+  <table class="ftab">
+    <thead><tr><th>d&nbsp;&nbsp;(ROM key)</th><th>F&nbsp;&nbsp;(value)</th>
+      <th>log₂(1+2<sup>−d/2</sup>)</th><th></th></tr></thead>
+    <tbody><tr><td>0</td><td>2</td><td>1.0000</td><td style='text-align:left;color:var(--accent);font-weight:600'></td></tr><tr class="usedrow"><td>1</td><td>2</td><td>0.7716</td><td style='text-align:left;color:var(--accent);font-weight:600'>← used (d = |X−Y|)</td></tr><tr><td>2</td><td>1</td><td>0.5850</td><td style='text-align:left;color:var(--accent);font-weight:600'></td></tr><tr><td>3</td><td>1</td><td>0.4368</td><td style='text-align:left;color:var(--accent);font-weight:600'></td></tr><tr><td>4</td><td>1</td><td>0.3219</td><td style='text-align:left;color:var(--accent);font-weight:600'></td></tr><tr><td>5</td><td>0</td><td>0.2348</td><td style='text-align:left;color:var(--accent);font-weight:600'></td></tr></tbody>
+  </table>
+  </div>
 </section>
 
 <section class="kpis">

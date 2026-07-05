@@ -320,10 +320,11 @@ def example_rows():
         verdict = ('<span class="bad">misjudge ✗</span>' if mis
                    else '<span class="ok2">match ✓</span>')
         out.append(
-            "<tr%s><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td>"
+            "<tr%s><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td>"
+            "<td>%d</td><td>%d</td>"
             "<td>%.0f</td><td>%+.1f%%</td><td>%.0f</td><td>%d</td><td class='hl'>%d</td>"
             "<td>%s</td></tr>"
-            % (' class="misrow"' if mis else '', A, B, C, D, Vth, S,
+            % (' class="misrow"' if mis else '', A, B, C, D, Vth, S, A * B - C * D,
                Shat, err, Vhat, oe, ok, verdict))
     return "".join(out)
 EXROWS = example_rows()
@@ -401,6 +402,63 @@ DERIV = (
     "    = max(x,y) + F(d)                   F(d) = log2(1 + 2^−d)   ← the ROM"
 )
 
+# ---- concrete LNS-add walkthrough for worked-example row 1 (C·D = 12·40) ----
+def _wbr(v):                       # (exponent, frac bit, L, binary) for the K=1 converter
+    e = v.bit_length() - 1
+    frac = 0 if e == 0 else (v >> (e - 1)) & 1
+    return e, frac, 2 * e + frac, format(v, 'b')
+
+def _build_walk():
+    A, B, C, D, Vth = 25, 30, 12, 40, 600
+    eA, fA, LA, bA = _wbr(A); eB, fB, LB, bB = _wbr(B)
+    eC, fC, LC, bC = _wbr(C); eD, fD, LD, bD = _wbr(D)
+    X = LA + LB; Y = LC + LD; d = abs(X - Y)
+    F = int(_romvals[d]); s = max(X, Y) + F
+    S = A * B + C * D; Shat = 2 ** (s / 2.0); err = 100.0 * (Shat - S) / S
+    eV, fV, LV, bV = _wbr(Vth); Vhat = 2 ** (LV / 2.0)
+    oe = 1 if S > Vth else 0; ok = 1 if s > LV else 0
+    L = []
+    L.append("  A=%d  B=%d  C=%d  D=%d   (Vth=%d)        logs in half-log2 units" % (A, B, C, D, Vth))
+    L.append("")
+    L.append("  1) log-convert   L(v) = 2*floor(log2 v) + (next bit below the leading 1)")
+    for v, e, f, Lv_, b in ((A, eA, fA, LA, bA), (B, eB, fB, LB, bB),
+                            (C, eC, fC, LC, bC), (D, eD, fD, LD, bD)):
+        L.append("       L(%2d) = 2*%d + %d = %-2d       %d = %sb" % (v, e, f, Lv_, v, b))
+    L.append("")
+    L.append("  2) multiply = add the logs   (adding logs multiplies the operands)")
+    L.append("       X = L(%d)+L(%d) = %d      ->  A*B ~ 2^(%g) = %.0f     (true %d)"
+             % (A, B, X, X / 2.0, 2 ** (X / 2.0), A * B))
+    L.append("       Y = L(%d)+L(%d) = %d      ->  C*D ~ 2^(%g) = %.0f     (true %d)"
+             % (C, D, Y, Y / 2.0, 2 ** (Y / 2.0), C * D))
+    L.append("")
+    L.append("  3) LNS add   (combine the two products, still in the log domain)")
+    L.append("       d = |X - Y| = |%d - %d| = %d" % (X, Y, d))
+    L.append("       F(d) = ROM[%d] = %d                         <-- the one table lookup" % (d, F))
+    L.append("       s = max(X,Y) + F(d) = %d + %d = %d" % (max(X, Y), F, s))
+    L.append("")
+    L.append("  4) result    S_hat = 2^(%g) = %.0f              (true A*B+C*D = %d,  err %+.1f%%)"
+             % (s / 2.0, Shat, S, err))
+    L.append("")
+    L.append("  5) compare   Lv = L(%d) = %d  ->  V_hat = %.0f" % (Vth, LV, Vhat))
+    L.append("       s=%d %s Lv=%d   ->  out = %d       (exact: %d %s %d -> %d)   %s"
+             % (s, '>' if s > LV else '<=', LV, ok, S, '>' if S > Vth else '<=', Vth, oe,
+                'match' if ok == oe else 'MISJUDGE'))
+    return html.escape("\n".join(L)), d
+WALK, DUSED = _build_walk()
+
+def _rom_slice():
+    rs = []
+    for k in range(0, 6):
+        val = _romvals[k] if k < len(_romvals) else "0"
+        realF = math.log2(1 + 2 ** (-(k / 2.0)))
+        used = (k == DUSED)
+        note = "← used (d = |X−Y|)" if used else ""
+        rs.append("<tr%s><td>%d</td><td>%s</td><td>%.4f</td>"
+                  "<td style='text-align:left;color:var(--accent);font-weight:600'>%s</td></tr>"
+                  % (' class="usedrow"' if used else '', k, val, realF, note))
+    return "".join(rs)
+ROMSLICE = _rom_slice()
+
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
 <header>
@@ -444,7 +502,7 @@ PAGE = f"""<div class="wrap">
   <div class="tablescroll">
   <table>
     <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>V<sub>th</sub></th>
-      <th>S = A·B+C·D</th><th>Ŝ (K=1)</th><th>err %</th><th>V̂ (K=1)</th>
+      <th>S = A·B+C·D</th><th>A·B−C·D</th><th>Ŝ (K=1)</th><th>err %</th><th>V̂ (K=1)</th>
       <th>out<br>exact</th><th>out<br>K=1</th><th>verdict</th></tr></thead>
     <tbody>{EXROWS}</tbody>
   </table>
@@ -455,6 +513,25 @@ PAGE = f"""<div class="wrap">
   third row carries a far larger −29% error yet still decides correctly: the approximation only
   flips the result when it <em>straddles</em> the threshold — which is why the overall
   disagreement is ~5.6% and concentrates near mid-range V<sub>th</sub>.</p>
+</section>
+
+<section>
+  <h2>Step-by-step — the LNS add for row 1 (C·D = 12·40)</h2>
+  <p class="note">Exactly what the multiplier-free path does for worked-example row 1
+  (A=25, B=30, C=12, D=40): leading-one-detector log conversion (<code>lod5.v</code>),
+  log-add = multiply, then the LNS add (<code>lns_add.v</code>) with the F ROM
+  (<code>lns_ftable.v</code>). Logs are in half-log₂ units (integer 2·log₂).</p>
+  <div class="deriv"><pre>{WALK}</pre></div>
+  <p class="note">The whole LNS add costs just <b>one table lookup</b> — <code>F(d)</code> at
+  key <b>d = |X − Y| = {DUSED}</b>. Here is that slice of the actual ROM
+  (<code>lns_ftable.v</code>) — the used key highlighted, with its neighbors:</p>
+  <div class="tablescroll" style="display:inline-block;max-width:100%">
+  <table class="ftab">
+    <thead><tr><th>d&nbsp;&nbsp;(ROM key)</th><th>F&nbsp;&nbsp;(value)</th>
+      <th>log₂(1+2<sup>−d/2</sup>)</th><th></th></tr></thead>
+    <tbody>{ROMSLICE}</tbody>
+  </table>
+  </div>
 </section>
 
 <section class="kpis">
@@ -626,6 +703,7 @@ tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
 td.hl{color:var(--accent);font-weight:600}
 td.delta{color:var(--ink2);font-weight:600}
 tbody tr.misrow{background:rgba(227,73,72,.09)}
+tbody tr.usedrow{background:rgba(42,120,214,.11)}
 .bad{color:#d03b3b;font-weight:700}
 .ok2{color:var(--good);font-weight:600}
 .note{color:var(--ink2);font-size:13.5px;max-width:78ch}
