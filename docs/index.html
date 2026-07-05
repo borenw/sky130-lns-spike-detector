@@ -61,10 +61,17 @@ figcaption{color:var(--ink2);font-size:12.5px;margin-top:8px;text-align:center;f
 .vtrack{background:var(--surface);border:1px solid var(--ring);border-radius:5px;height:16px;overflow:hidden}
 .vbar{height:100%;background:var(--accent);border-radius:5px 4px 4px 5px;min-width:2px}
 .vval{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums;font-weight:600}
+.filehdr{display:flex;gap:20px;align-items:baseline;flex-wrap:wrap;margin-top:0}
+.filehdr a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px}
+.filehdr a:hover{text-decoration:underline}
+.files{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 28px;margin-top:16px}
+.fgroup h3{font-size:11.5px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+.fgroup a{display:block;font-size:13.5px;color:var(--accent);text-decoration:none;padding:2.5px 0}
+.fgroup a:hover{text-decoration:underline}
 footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:var(--ink2);font-size:13px}
 .fine{color:var(--muted);font-size:12.5px}
 @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.dies{grid-template-columns:1fr}
-  h1{font-size:25px}.crow{grid-template-columns:64px 1fr 64px}}
+  h1{font-size:25px}.crow{grid-template-columns:64px 1fr 64px}.files{grid-template-columns:repeat(2,1fr)}}
 </style></head><body><div class="wrap">
 <header>
   <div class="eyebrow">SkyWater 130 nm · open-source RTL→GDS flow (yosys)</div>
@@ -2088,9 +2095,16 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
 <div class='vrow'><span class='vlab'>33538050</span><div class='vtrack'><div class='vbar' style='width:0.00%'></div></div><span class='vval'>0.00%</span></div></div>
 </section>
 
+<section>
+  <h2>Files</h2>
+  <p class="filehdr note"><a href="https://github.com/borenw/sky130-lns-spike-detector">Browse the repository ↗</a>
+     <a href="https://github.com/borenw/sky130-lns-spike-detector/archive/refs/heads/main.zip">Download all (.zip) ↓</a></p>
+  <div class="files"><div class="fgroup"><h3>RTL — source</h3><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/rtl/mult_detector.v">mult_detector.v</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/rtl/log_detector.v">log_detector.v</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/rtl/lod5.v">lod5.v</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/rtl/lns_add.v">lns_add.v</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/rtl/lns_ftable.v">lns_ftable.v (generated)</a></div><div class="fgroup"><h3>Gate-level netlists</h3><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/synth/mult_detector_netlist.v">mult_detector_netlist.v</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/synth/log_detector_netlist.v">log_detector_netlist.v</a></div><div class="fgroup"><h3>Layout / GDS + synth</h3><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/synth/mult_detector.gds">mult_detector.gds</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/synth/log_detector.gds">log_detector.gds</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/synth/run_mult.ys">run_mult.ys</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/synth/run_log.ys">run_log.ys</a></div><div class="fgroup"><h3>Model & scripts</h3><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/model/model.py">model.py (golden + F-ROM)</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/model/power_area.py">power_area.py</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/model/floorplan.py">floorplan.py</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/model/build_page.py">build_page.py</a></div><div class="fgroup"><h3>Verification</h3><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/verif/tb.v">tb.v</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/verif/vectors.csv">vectors.csv</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/verif/sim_report.txt">sim_report.txt</a></div><div class="fgroup"><h3>Reports</h3><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/report/SUMMARY.md">SUMMARY.md</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/report/model_accuracy.txt">model_accuracy.txt</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/report/elaboration.txt">elaboration.txt</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/report/power_area.csv">power_area.csv</a><a href="https://github.com/borenw/sky130-lns-spike-detector/blob/main/report/floorplan.csv">floorplan.csv</a></div></div>
+</section>
+
 <footer>
   <p><b>Flow:</b> Python golden model (emits the F-ROM) → RTL (Verilog) →
-  Icarus verify (61,657 vectors, both PASS) → yosys synth to sky130 HD →
+  Icarus verify (63,875 vectors, both PASS) → yosys synth to sky130 HD →
   analytic power + standard-cell floorplan. Reproduce: <code>./run.sh</code> then
   <code>python3 model/floorplan.py &amp;&amp; python3 model/build_page.py</code>.</p>
   <p class="fine">Estimates are labelled as such. Routed area/power/timing would come from

@@ -77,6 +77,12 @@ vth_rows, overall = per_vth()
 svg_mult = open(os.path.join(REPORT, "mult_detector_layout.svg")).read()
 svg_log  = open(os.path.join(REPORT, "log_detector_layout.svg")).read()
 
+# vector count (for the footer) and GitHub links base
+nvec = sum(1 for _ in open(os.path.join(ROOT, "verif", "vectors.csv"))) - 1
+REPO      = "https://github.com/borenw/sky130-lns-spike-detector"
+REPO_BLOB = REPO + "/blob/main"
+REPO_ZIP  = REPO + "/archive/refs/heads/main.zip"
+
 M = pa["mult baseline"]; L = pa["log K=1"]
 FM = fp["mult_detector"]; FL = fp["log_detector"]
 
@@ -206,6 +212,53 @@ def block_diagram():
     P.append('</svg>')
     return '<figure class="bd">' + "".join(P) + '</figure>'
 
+# ---- file links (to the GitHub repo) ----
+FILE_GROUPS = [
+    ("RTL — source", [
+        ("mult_detector.v", "rtl/mult_detector.v"),
+        ("log_detector.v", "rtl/log_detector.v"),
+        ("lod5.v", "rtl/lod5.v"),
+        ("lns_add.v", "rtl/lns_add.v"),
+        ("lns_ftable.v (generated)", "rtl/lns_ftable.v"),
+    ]),
+    ("Gate-level netlists", [
+        ("mult_detector_netlist.v", "synth/mult_detector_netlist.v"),
+        ("log_detector_netlist.v", "synth/log_detector_netlist.v"),
+    ]),
+    ("Layout / GDS + synth", [
+        ("mult_detector.gds", "synth/mult_detector.gds"),
+        ("log_detector.gds", "synth/log_detector.gds"),
+        ("run_mult.ys", "synth/run_mult.ys"),
+        ("run_log.ys", "synth/run_log.ys"),
+    ]),
+    ("Model & scripts", [
+        ("model.py (golden + F-ROM)", "model/model.py"),
+        ("power_area.py", "model/power_area.py"),
+        ("floorplan.py", "model/floorplan.py"),
+        ("build_page.py", "model/build_page.py"),
+    ]),
+    ("Verification", [
+        ("tb.v", "verif/tb.v"),
+        ("vectors.csv", "verif/vectors.csv"),
+        ("sim_report.txt", "verif/sim_report.txt"),
+    ]),
+    ("Reports", [
+        ("SUMMARY.md", "report/SUMMARY.md"),
+        ("model_accuracy.txt", "report/model_accuracy.txt"),
+        ("elaboration.txt", "report/elaboration.txt"),
+        ("power_area.csv", "report/power_area.csv"),
+        ("floorplan.csv", "report/floorplan.csv"),
+    ]),
+]
+
+def files_section():
+    out = []
+    for title, items in FILE_GROUPS:
+        links = "".join('<a href="%s/%s">%s</a>' % (REPO_BLOB, path, label)
+                        for label, path in items)
+        out.append('<div class="fgroup"><h3>%s</h3>%s</div>' % (title, links))
+    return "".join(out)
+
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
 <header>
@@ -291,9 +344,16 @@ PAGE = f"""<div class="wrap">
   <div class="vth" data-title="disagreement % by V_th">{vth_bars()}</div>
 </section>
 
+<section>
+  <h2>Files</h2>
+  <p class="filehdr note"><a href="{REPO}">Browse the repository ↗</a>
+     <a href="{REPO_ZIP}">Download all (.zip) ↓</a></p>
+  <div class="files">{files_section()}</div>
+</section>
+
 <footer>
   <p><b>Flow:</b> Python golden model (emits the F-ROM) → RTL (Verilog) →
-  Icarus verify (61,657 vectors, both PASS) → yosys synth to sky130 HD →
+  Icarus verify ({nvec:,} vectors, both PASS) → yosys synth to sky130 HD →
   analytic power + standard-cell floorplan. Reproduce: <code>./run.sh</code> then
   <code>python3 model/floorplan.py &amp;&amp; python3 model/build_page.py</code>.</p>
   <p class="fine">Estimates are labelled as such. Routed area/power/timing would come from
@@ -365,10 +425,17 @@ figcaption{color:var(--ink2);font-size:12.5px;margin-top:8px;text-align:center;f
 .vtrack{background:var(--surface);border:1px solid var(--ring);border-radius:5px;height:16px;overflow:hidden}
 .vbar{height:100%;background:var(--accent);border-radius:5px 4px 4px 5px;min-width:2px}
 .vval{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums;font-weight:600}
+.filehdr{display:flex;gap:20px;align-items:baseline;flex-wrap:wrap;margin-top:0}
+.filehdr a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px}
+.filehdr a:hover{text-decoration:underline}
+.files{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 28px;margin-top:16px}
+.fgroup h3{font-size:11.5px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+.fgroup a{display:block;font-size:13.5px;color:var(--accent);text-decoration:none;padding:2.5px 0}
+.fgroup a:hover{text-decoration:underline}
 footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:var(--ink2);font-size:13px}
 .fine{color:var(--muted);font-size:12.5px}
 @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.dies{grid-template-columns:1fr}
-  h1{font-size:25px}.crow{grid-template-columns:64px 1fr 64px}}
+  h1{font-size:25px}.crow{grid-template-columns:64px 1fr 64px}.files{grid-template-columns:repeat(2,1fr)}}
 """
 
 os.makedirs(DOCS, exist_ok=True)
