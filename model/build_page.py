@@ -319,13 +319,16 @@ def example_rows():
         mis = (oe != ok)
         verdict = ('<span class="bad">misjudge ✗</span>' if mis
                    else '<span class="ok2">match ✓</span>')
+        # err% is the OUTPUT error: N/A when the output is correct, shown only on a misjudge
+        err_cell = ('<span class="bad">%+.1f%%</span>' % err if mis
+                    else '<span class="na">—</span>')
         out.append(
             "<tr%s><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td>"
             "<td>%d</td><td>%d</td>"
-            "<td>%.0f</td><td>%+.1f%%</td><td>%.0f</td><td>%d</td><td class='hl'>%d</td>"
+            "<td>%.0f</td><td>%s</td><td>%.0f</td><td>%d</td><td class='hl'>%d</td>"
             "<td>%s</td></tr>"
             % (' class="misrow"' if mis else '', A, B, C, D, Vth, S, A * B - C * D,
-               Shat, err, Vhat, oe, ok, verdict))
+               Shat, err_cell, Vhat, oe, ok, verdict))
     return "".join(out)
 EXROWS = example_rows()
 
@@ -497,8 +500,10 @@ PAGE = f"""<div class="wrap">
   <h2>Worked examples — where the approximation misjudges</h2>
   <p class="note">Real values through the implemented <code>(A·B + C·D) &gt; V<sub>th</sub></code>
   build (every number on this page is this add build). <b>Ŝ = 2<sup>s/2</sup></b> is the linear
-  value the K=1 log path represents for A·B+C·D; <b>V̂ = 2<sup>Lv/2</sup></b> is the log-quantized
-  threshold; <b>err%</b> = (Ŝ − S)/S refers to the true input S. The K=1 output is (Ŝ &gt; V̂).</p>
+  value the K=1 log path represents for A·B+C·D (compare it with S — that gap is the log path's
+  magnitude approximation); <b>V̂ = 2<sup>Lv/2</sup></b> is the log-quantized threshold; the K=1
+  output is (Ŝ &gt; V̂). <b>err%</b> is the <b>output</b> error — <b>N/A when the output is
+  correct</b>, shown only on the row where the approximation flips the decision.</p>
   <div class="tablescroll">
   <table>
     <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>V<sub>th</sub></th>
@@ -507,12 +512,13 @@ PAGE = f"""<div class="wrap">
     <tbody>{EXROWS}</tbody>
   </table>
   </div>
-  <p class="note"><b>The last row misjudges.</b> S = 18 sits just above V<sub>th</sub> = 17, but
-  K=1 rounds A·B+C·D down to Ŝ = 16 and the threshold to V̂ = 16, so 16 &gt; 16 is false —
+  <p class="note"><b>Only the last row misjudges.</b> S = 18 sits just above V<sub>th</sub> = 17,
+  but K=1 rounds A·B+C·D down to Ŝ = 16 and the threshold to V̂ = 16, so 16 &gt; 16 is false —
   output 0 where exact says 1 (a ~11% under-estimate landing right on the boundary). Note the
-  third row carries a far larger −29% error yet still decides correctly: the approximation only
-  flips the result when it <em>straddles</em> the threshold — which is why the overall
-  disagreement is ~5.6% and concentrates near mid-range V<sub>th</sub>.</p>
+  third row's Ŝ = 2048 is a long way below S = 2900 — a <em>larger</em> magnitude gap — yet it
+  still decides correctly, so its output error is N/A: the approximation only changes the output
+  when it <em>straddles</em> the threshold, which is why the overall disagreement is ~5.6% and
+  concentrates near mid-range V<sub>th</sub>.</p>
 </section>
 
 <section>
@@ -706,6 +712,7 @@ tbody tr.misrow{background:rgba(227,73,72,.09)}
 tbody tr.usedrow{background:rgba(42,120,214,.11)}
 .bad{color:#d03b3b;font-weight:700}
 .ok2{color:var(--good);font-weight:600}
+.na{color:var(--muted)}
 .note{color:var(--ink2);font-size:13.5px;max-width:78ch}
 .note code{font-size:.88em}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0}
