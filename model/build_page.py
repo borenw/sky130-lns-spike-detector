@@ -4,7 +4,7 @@ Build docs/index.html (a self-contained GitHub Pages page) from the flow's own
 artifacts: power_area.csv, floorplan.csv, model_accuracy.txt, the layout SVGs,
 and a cell-function breakdown of each netlist.  No numbers are hand-typed.
 """
-import os, csv, re, html
+import os, csv, re, html, math
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
 ROOT   = os.path.dirname(HERE)
@@ -285,6 +285,32 @@ def files_section():
         out.append('<div class="fgroup"><h3>%s</h3>%s</div>' % (title, links))
     return "".join(out)
 
+# ---- LNS-add derivation detail (for the deep-dive section) ----
+def _Fd(dh):                       # dh = ROM index in half-log2 units; real d = dh/2
+    d = dh / 2.0
+    real = math.log2(1.0 + 2.0 ** (-d))
+    return real, round(2 * real)
+FROWS = "".join(
+    "<tr><td>%.1f</td><td>%.4f</td><td>%d</td></tr>" % (dh / 2.0, _Fd(dh)[0], _Fd(dh)[1])
+    for dh in range(0, 7))
+_mrom = re.search(r'F\(d\) ROM \(half-log2 units\):\s*\[([^\]]*)\]',
+                  open(os.path.join(REPORT, "model_accuracy.txt")).read())
+_romvals = [v.strip() for v in _mrom.group(1).split(",")] if _mrom else ["2", "2", "1", "1", "1", "0"]
+ROM_LEN  = len(_romvals)
+ROM_MAXD = ROM_LEN - 1
+ROM_PREVIEW = "[" + ", ".join(_romvals[:9]) + ", …, 0]"
+DERIV = (
+    "  A·B = 2^x           C·D = 2^y            x = log2 A + log2 B\n"
+    "\n"
+    "  2^x + 2^y                       (assume x ≥ y)\n"
+    "    = 2^x · ( 1 + 2^(y−x) )\n"
+    "    = 2^max(x,y) · ( 1 + 2^−d )         d = |x − y|\n"
+    "\n"
+    "  s = log2( 2^x + 2^y )\n"
+    "    = max(x,y) + log2( 1 + 2^−d )\n"
+    "    = max(x,y) + F(d)                   F(d) = log2(1 + 2^−d)   ← the ROM"
+)
+
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
 <header>
@@ -304,6 +330,13 @@ PAGE = f"""<div class="wrap">
 <section class="bdsec">
   <h2>Datapath — target use case (A·B − C·D) &gt; V<sub>th</sub></h2>
   {block_diagram()}
+  <a class="callout" href="#lns-add-rom">
+    <span class="cico">💡</span>
+    <span><b>What exactly is the “LNS add” ROM?</b> It’s a <b>1-input</b> table
+    F(d) = log₂(1 + 2<sup>−d</sup>) indexed only by d = |x − y|, and the result stays
+    in the log domain — it is <em>not</em> 2<sup>x</sup> − 2<sup>y</sup>.
+    <span class="clink">See the derivation ↓</span></span>
+  </a>
 </section>
 
 <section class="kpis">
@@ -370,6 +403,41 @@ PAGE = f"""<div class="wrap">
   <div class="vth" data-title="disagreement % by V_th">{vth_bars()}</div>
 </section>
 
+<section id="lns-add-rom">
+  <h2>How the “LNS add” ROM works</h2>
+  <p class="note">In a logarithmic number system every value is carried as its base-2 log,
+  so <b>multiply is free</b> — you add the logs: x = log₂A + log₂B = log₂(A·B). The hard part
+  is <b>adding</b> two values, and that is the one operation the ROM exists for. Here is the
+  exact identity it implements (base 2, because the leading-one detector yields log₂ directly):</p>
+
+  <div class="deriv"><pre>{DERIV}</pre></div>
+
+  <p class="note">The key move is factoring out the larger term:
+  <code>2<sup>x</sup>+2<sup>y</sup> = 2<sup>max(x,y)</sup>·(1+2<sup>−d</sup>)</code>. What’s left,
+  <b>F(d) = log₂(1 + 2<sup>−d</sup>)</b>, depends on the <b>single</b> variable d = |x − y| — so the
+  ROM is a small 1-D table, not a 2-D (x, y) surface, and the sum <b>never leaves the log
+  domain</b> (s is compared against log₂(Vth) directly; the linear value 2<sup>x</sup> − 2<sup>y</sup>
+  is never formed).</p>
+
+  <div class="tablescroll" style="display:inline-block;max-width:100%">
+  <table class="ftab">
+    <thead><tr><th>d = |x−y|</th><th>F(d) = log₂(1+2<sup>−d</sup>)</th><th>stored (½-log₂ units)</th></tr></thead>
+    <tbody>{FROWS}</tbody>
+  </table>
+  </div>
+  <p class="note">Logs are carried in <b>half-log₂ units</b> (the integer 2·log₂), so the ROM is
+  indexed by the integer |X−Y| and outputs round(2·F) — just 0, 1, or 2. The whole table is
+  <code>{ROM_PREVIEW}</code> ({ROM_LEN} entries, d = 0…{ROM_MAXD}), i.e. ~2 bits out. That is the
+  entire “F(d) ROM” drawn in the datapath above.</p>
+
+  <p class="note"><b>Subtraction is the hard cousin.</b> A true LNS subtract would use
+  F₋(d) = log₂(1 − 2<sup>−d</sup>) (plus a sign bit) — still a 1-input table of |x − y|, but it
+  diverges to −∞ as d → 0 (catastrophic cancellation when A·B ≈ C·D), exactly where K=1 is
+  weakest. The threshold compare <code>(A·B − C·D) &gt; Vth</code> sidesteps it by rearranging to
+  an <b>add</b>, <code>A·B &gt; C·D + Vth</code>, reusing this same
+  F(d) = log₂(1 + 2<sup>−d</sup>) ROM.</p>
+</section>
+
 <section>
   <h2>Files</h2>
   <p class="filehdr note"><a href="{REPO}">Browse the repository ↗</a>
@@ -414,6 +482,16 @@ section{margin-top:38px}
 .bd{margin:14px 0 0;background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:12px 12px 12px}
 .bd svg{display:block;width:100%;height:auto}
 .bd figcaption{margin-top:10px;padding-top:10px;border-top:1px solid var(--grid);color:var(--ink2);font-size:12.5px;line-height:1.5}
+.callout{display:flex;gap:12px;align-items:flex-start;margin-top:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--ring);border-left:3px solid var(--accent);border-radius:8px;text-decoration:none;color:var(--ink2);font-size:13.5px;line-height:1.55}
+.callout:hover{border-color:var(--accent)}
+.callout b{color:var(--ink)}
+.callout .cico{font-size:18px;line-height:1.3}
+.callout .clink{color:var(--accent);font-weight:600;white-space:nowrap}
+.deriv{margin:14px 0;overflow-x:auto;background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:14px 16px}
+.deriv pre{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.7;color:var(--ink);white-space:pre}
+.ftab{border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.ftab th,.ftab td{border:1px solid var(--grid);padding:5px 12px;text-align:right}
+.ftab th{color:var(--ink2);font-weight:600;background:var(--surface)}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border:0}
 .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px 16px 14px}
 .kv{font-size:30px;font-weight:700;letter-spacing:-.01em;color:var(--accent)}
