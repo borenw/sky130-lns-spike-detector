@@ -499,17 +499,20 @@ LAST_NZ = max(d for d, v in enumerate(FTAB) if v > 0)
 XMAX    = min(len(FTAB) - 1, LAST_NZ + 3)
 
 def lut_transfer_svg():
-    # Vth'(C,D) = log2(1 + 2^(log2 Vth - log2 CD)) plotted vs the input log2(C*D),
-    # for a threshold Vth and for 4x Vth -> shows Vth's impact (a rightward shift).
-    V1 = 256; V2 = 4 * V1
-    v1 = math.log2(V1); v2 = math.log2(V2)
-    x0, x1, ymax = 3.0, 17.0, 7.0
+    # Vth'(C,D) vs log2(Vth) (sweeping the programmable threshold), for two product
+    # levels C*D that are 4x apart -> shows how the operand level shifts the mapping.
+    CD1 = 256; CD2 = 4 * CD1
+    c1 = math.log2(CD1); c2 = math.log2(CD2)                       # knee x-positions (8, 10)
+    x0, x1, ymax = 3.0, 16.0, 8.0
     W, H = 560, 214
     ox, oy = 44, 14
     pw, ph = W - ox - 12, H - oy - 56
     def X(u): return ox + pw * (u - x0) / (x1 - x0)
     def Y(val): return oy + ph * (1 - min(val, ymax) / ymax)
-    def vp(u, v): return math.log2(1.0 + 2.0 ** (v - u))
+    def vp_q(lv, CD):                                             # ACTUAL quantized Vth′; lv = log2(Vth)
+        Lv = round(SCALE * lv); Lc = round(SCALE * math.log2(CD))
+        d = abs(Lv - Lc); Fv = FTAB[d] if d < len(FTAB) else 0
+        return (max(Lc, Lv) - Lc + Fv) / float(SCALE)             # = out_q − log₂(C·D)
     ACC, AQ = "var(--accent)", "#199e70"
     S = ['<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg" '
          'font-family="system-ui,-apple-system,Segoe UI,sans-serif">' % (W, H)]
@@ -532,24 +535,20 @@ def lut_transfer_svg():
              % (ox, oy, ox, oy + ph))
     S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
              % (ox, oy + ph, ox + pw, oy + ph))
-    def vp_q(u, Vth):                                             # ACTUAL quantized Vth′
-        Lu = round(SCALE * u); Lv = round(SCALE * math.log2(Vth))
-        d = abs(Lu - Lv); Fv = FTAB[d] if d < len(FTAB) else 0
-        return (max(Lu, Lv) - Lu + Fv) / float(SCALE)             # = out_q − log₂(C·D)
-    for Vth, v, col in ((V1, v1, ACC), (V2, v2, AQ)):             # two programmed thresholds
-        u, path = x0, "M %.1f %.1f" % (X(x0), Y(vp_q(x0, Vth)))   # staircase (quarter-log₂ steps)
+    for CD, c, col in ((CD1, c1, ACC), (CD2, c2, AQ)):            # two product levels
+        u, path = x0, "M %.1f %.1f" % (X(x0), Y(vp_q(x0, CD)))    # staircase (quarter-log₂ steps)
         while u <= x1 + 1e-6:
-            path += " H %.1f V %.1f" % (X(u), Y(vp_q(u, Vth)))
+            path += " H %.1f V %.1f" % (X(u), Y(vp_q(u, CD)))
             u += 0.04
         S.append('<path d="%s" fill="none" stroke="%s" stroke-width="2"/>' % (path, col))
-        S.append('<circle cx="%.1f" cy="%.1f" r="3.2" fill="%s"/>' % (X(v), Y(1), col))   # knee: C·D = Vth
-    lx, ly = ox + pw - 196, oy + 10                               # legend (top-right, empty area)
+        S.append('<circle cx="%.1f" cy="%.1f" r="3.2" fill="%s"/>' % (X(c), Y(1), col))   # knee: Vth = C·D
+    lx, ly = ox + 14, oy + 10                                     # legend (top-left, empty area)
     S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx, ly, lx + 18, ly, ACC))
-    S.append('<text x="%.1f" y="%.1f" font-size="10.5" fill="var(--ink2)">Vth = %d</text>' % (lx + 23, ly + 3, V1))
-    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx + 92, ly, lx + 110, ly, AQ))
-    S.append('<text x="%.1f" y="%.1f" font-size="10.5" fill="var(--ink2)">Vth = %d (4×)</text>' % (lx + 115, ly + 3, V2))
+    S.append('<text x="%.1f" y="%.1f" font-size="10.5" fill="var(--ink2)">C·D = %d</text>' % (lx + 23, ly + 3, CD1))
+    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx + 96, ly, lx + 114, ly, AQ))
+    S.append('<text x="%.1f" y="%.1f" font-size="10.5" fill="var(--ink2)">C·D = %d (4×)</text>' % (lx + 119, ly + 3, CD2))
     S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="11" fill="var(--ink2)">'
-             'input  log₂(C·D)</text>' % (ox + pw / 2, H - 4))
+             'programmable threshold  log₂(Vth)</text>' % (ox + pw / 2, H - 4))
     S.append('<text x="11" y="%.1f" text-anchor="middle" font-size="11" fill="var(--ink2)" '
              'transform="rotate(-90 11 %.1f)">Vth′(C,D)</text>' % (oy + ph / 2, oy + ph / 2))
     S.append('</svg>')
@@ -812,15 +811,16 @@ PAGE = f"""<div class="wrap">
   full A·B+C·D detector the same table combines the two <em>products</em> instead, and when
   C·D &lt; Vth the roles swap so the address stays ≥ 0.</p>
 
-  <h3 class="sub3">Transfer function &nbsp;<span class="fn">Vth′ vs log₂(C·D), for two thresholds</span></h3>
+  <h3 class="sub3">Transfer function &nbsp;<span class="fn">Vth′ vs log₂(Vth), for two product levels</span></h3>
   <div class="plotcard">{lut_transfer_svg()}</div>
-  <p class="note"><b>Impact of Vth — two programmed settings.</b> Vth is a runtime input, so these
-  two <em>quantized staircases</em> ({UNITW} steps — the actual LUT function, not a smooth curve)
-  are just two values you can program. Raising Vth slides where each product lands:
-  <b>4× Vth shifts the curve right by log₂4 = 2</b> (in log₂(C·D)) and lifts Vth′ everywhere. The
-  knee (dot) is at C·D = Vth, where Vth′ = log₂2 = 1; for C·D ≫ Vth the correction decays to 0
-  (the sum is just C·D), and for C·D ≪ Vth it rises toward log₂(Vth) − log₂(C·D) (the sum is
-  dominated by Vth).</p>
+  <p class="note"><b>Sweeping the programmable Vth.</b> x is the runtime threshold
+  <code>log₂(Vth)</code>; the two <em>quantized staircases</em> ({UNITW} steps — the actual LUT
+  function, not a smooth curve) are two fixed product levels <code>C·D</code>, 4× apart. Each rises
+  with Vth: the knee (dot) is at <b>Vth = C·D</b> (Vth′ = log₂2 = 1). For <b>Vth ≪ C·D</b> the
+  correction ≈ 0 (the threshold is negligible next to the product); for <b>Vth ≫ C·D</b> it rises
+  toward log₂(Vth) − log₂(C·D) (the threshold dominates). A <b>4× larger C·D shifts the knee right
+  by log₂4 = 2</b> — a bigger product needs a proportionally bigger Vth before the threshold starts
+  to matter.</p>
 
   <h3 class="sub3">Truth table &nbsp;<span class="fn">address → Vth′</span> (identical runs collapsed)</h3>
   <div class="tablescroll" style="display:inline-block;max-width:100%">
