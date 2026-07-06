@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
 """
-Golden model for the two-design spike detector.
+Golden model for the two-design threshold detector.
 
-Function (both designs):  spike = (A*B + C*D) > Vth
+Function (both designs):  out = (A*B + C*D) > Vth
   A,B,C,D : WIDTH-bit unsigned   (WIDTH=5 -> 0..31)
   Vth     : VW-bit unsigned      (VW=11    -> 0..2047, covers max S = 31*31*2 = 1922)
 
-Design 1 (baseline) computes the exact integer math -> spike_exact.
+Design 1 (baseline) computes the exact integer math -> out_exact.
 Design 2 (log / LNS, K=1) computes an approximate result in the log2 domain with
-one fraction bit (Mitchell-style leading-one detector + 1 mantissa bit) -> spike_k1.
+K mantissa bits (Mitchell-style leading-one detector + K helper bits) -> out_k1.
 
-EVERYTHING here is integer arithmetic in "half-log2 units" (units of 0.5), so the
-Verilog RTL can be made bit-exact to spike_k1.  The F(d) add-correction ROM is
+EVERYTHING here is integer arithmetic in "1/2^K-log2 units" (K=2 -> quarter-log2), so
+the Verilog RTL can be made bit-exact to out_k1.  The F(d) add-correction ROM is
 generated here and emitted as rtl/lns_ftable.v -> single source of truth, model and
 hardware cannot drift.
 """
 import math, os, csv, argparse
 import numpy as np
 
-WIDTH = 12           # input bit width
-K     = 1            # fraction bits kept in the log converter
-VW    = 25           # Vth bit width (covers max S below)
-IN_MAX  = (1 << WIDTH) - 1          # 4095
-VTH_MAX = (1 << VW) - 1             # 33554431
-S_MAX   = IN_MAX*IN_MAX*2           # 33538050 (needs 25 bits)
+WIDTH = 10           # input bit width
+K     = 2            # fraction (mantissa) bits kept in the log converter
+VW    = 21           # Vth bit width (covers max S below)
+SCALE = 1 << K       # log values carried in units of 1/SCALE of a log2 (= 2^K per log2)
+IN_MAX  = (1 << WIDTH) - 1          # 1023
+VTH_MAX = (1 << VW) - 1             # 2097151
+S_MAX   = IN_MAX*IN_MAX*2           # 2093058 (needs 21 bits)
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
 ROOT   = os.path.dirname(HERE)
@@ -32,44 +33,49 @@ VERIF  = os.path.join(ROOT, "verif")
 REPORT = os.path.join(ROOT, "report")
 
 # ---------------------------------------------------------------------------
-# K=1 log converter (scalar reference).  Returns (is_zero, L) with
-#   L = 2*floor(log2 v) + fracbit          (integer, half-log2 units)
-# fracbit is the single mantissa bit just below the leading one (K=1).
+# K-bit log converter (scalar reference).  Returns (is_zero, L) with
+#   L = SCALE*floor(log2 v) + <top K mantissa bits>     (integer, 1/SCALE-log2 units)
+# The K mantissa bits are the K bits just below the leading one (K=1 -> half-log2
+# units, K=2 -> quarter-log2 units, ...).  Same generator, any K.
 # ---------------------------------------------------------------------------
-def log_k1(v):
+def log_k1(v):                             # name kept; behaviour is the K-bit converter
     if v == 0:
         return (1, 0)
     e = v.bit_length() - 1                 # floor(log2 v)
-    frac = 0 if e == 0 else ((v >> (e - 1)) & 1)
-    return (0, 2 * e + frac)
+    frac = 0
+    for i in range(1, K + 1):              # bits e-1, e-2, ... e-K, MSB first
+        pos = e - i
+        bit = ((v >> pos) & 1) if pos >= 0 else 0
+        frac |= bit << (K - i)
+    return (0, (e << K) + frac)
 
 # ---------------------------------------------------------------------------
-# F(d) = log2(1 + 2^-d) add-correction, in half-log2 units, rounded to int.
-# d is itself a half-log2 quantity (|x-y| in half units), so real d = d/2.
-# dmax = max |X-Y| = max(L(A)+L(B)) = 2*(L for v in 1..31)max = 2*9 = 18.
+# F(d) = log2(1 + 2^-d) add-correction, in 1/SCALE-log2 units, rounded to int.
+# d is itself a 1/SCALE-log2 quantity (|x-y| in those units), real d = d/SCALE.
+# dmax = max |X-Y| = 2 * max L(v) = 2 * (SCALE*(WIDTH-1) + (SCALE-1)).
 # ---------------------------------------------------------------------------
 def build_ftab(dmax):
     tab = []
     for d in range(dmax + 1):
-        val = 2.0 * math.log2(1.0 + 2.0 ** (-(d / 2.0)))
+        val = SCALE * math.log2(1.0 + 2.0 ** (-(d / float(SCALE))))
         tab.append(int(round(val)))
     return tab
 
-DMAX = 2 * (2 * (WIDTH - 1) + 1)           # = 18 for WIDTH=5
+DMAX = 2 * (SCALE * (WIDTH - 1) + (SCALE - 1))   # = 78 for WIDTH=10, K=2
 FTAB = build_ftab(DMAX)
 
 # ---------------------------------------------------------------------------
-# Scalar spike models (the authoritative specs).
+# Scalar output models (the authoritative specs).
 # ---------------------------------------------------------------------------
-def spike_exact(A, B, C, D, Vth):
+def out_exact(A, B, C, D, Vth):
     return 1 if (A * B + C * D) > Vth else 0
 
-def spike_k1(A, B, C, D, Vth):
+def out_k1(A, B, C, D, Vth):
     zA, la = log_k1(A); zB, lb = log_k1(B)
     zC, lc = log_k1(C); zD, ld = log_k1(D)
     zx = zA or zB                          # term A*B is zero
     zy = zC or zD                          # term C*D is zero
-    X = la + lb                            # log2(A)+log2(B) in half-units
+    X = la + lb                            # log2(A)+log2(B) in 1/2^K-units
     Y = lc + ld
     if zx and zy:
         s_zero, s = 1, 0
@@ -82,7 +88,7 @@ def spike_k1(A, B, C, D, Vth):
         d = abs(X - Y)
         s = max(X, Y) + FTAB[d]            # LNS add: max + F(|x-y|)
     zv, lv = log_k1(Vth)
-    if zv:                                 # Vth == 0  -> spike = (S > 0)
+    if zv:                                 # Vth == 0  -> out = (S > 0)
         return 0 if s_zero else 1
     if s_zero:                             # S == 0, Vth > 0
         return 0
@@ -95,11 +101,13 @@ def emit_ftable_v():
     os.makedirs(RTL, exist_ok=True)
     idx_bits = 8                                   # fixed byte-wide index: holds DMAX
                                                    # for WIDTH up to ~120, keeps RTL width-robust
-    fbits    = max(1, (max(FTAB)).bit_length())    # value width      (0..2  -> 2)
+    fbits    = 4                                   # fixed nibble output: holds F up to
+                                                   # SCALE=2^K for K<=3, keeps RTL width-robust
     path = os.path.join(RTL, "lns_ftable.v")
     with open(path, "w") as f:
         f.write("// AUTO-GENERATED by model/model.py -- DO NOT EDIT.\n")
-        f.write("// F(d) = round( 2*log2(1 + 2^-(d/2)) ), half-log2 units.  K=%d.\n" % K)
+        f.write("// F(d) = round( %d*log2(1 + 2^-(d/%d)) ), 1/%d-log2 units.  K=%d.\n"
+                % (SCALE, SCALE, SCALE, K))
         f.write("module lns_ftable(input [%d:0] d, output reg [%d:0] f);\n"
                 % (idx_bits - 1, fbits - 1))
         f.write("  always @* begin\n    case (d)\n")
@@ -114,8 +122,8 @@ def emit_ftable_v():
 # The 12-bit space is 4096^4 ~ 2.8e14 combos -- far too large to enumerate, so
 # we estimate the disagreement rate by Monte-Carlo sampling.
 # ---------------------------------------------------------------------------
-VTHS = [0, 1, 1000, 100000, 1000000, 4000000, 8388608,
-        12000000, 16769025, 20000000, 25000000, 33538050]
+VTHS = [0, 1, 1000, 50000, 200000, 500000, 1046529, 1048576,
+        1400000, 1800000, 2093058]
 
 def vec_log_tables(nmax):
     """Lookup arrays z[v], L[v] for v in 0..nmax."""
@@ -146,7 +154,7 @@ def compute_sample(N, seed):
     Sexact = A * B + C * D
     return A, B, C, D, Sexact, s, s_zero
 
-def k1_spike_vec(s, s_zero, Vth):
+def k1_out_vec(s, s_zero, Vth):
     zv, lv = log_k1(int(Vth))
     if zv:                                   # Vth == 0
         return (~s_zero).astype(np.int8)
@@ -168,8 +176,8 @@ def main():
 
     A, B, C, D, Sexact, s, s_zero = compute_sample(args.nsamples, args.seed)
     ncombo = A.size
-    print("sampled %d random combos from the %d^4 = %.2e 12-bit space"
-          % (ncombo, IN_MAX + 1, (IN_MAX + 1.0) ** 4))
+    print("sampled %d random combos from the %d^4 = %.2e %d-bit space"
+          % (ncombo, IN_MAX + 1, (IN_MAX + 1.0) ** 4, WIDTH))
 
     rng = np.random.default_rng(args.seed + 1)
 
@@ -181,7 +189,7 @@ def main():
 
     for Vth in VTHS:
         exact = (Sexact > Vth).astype(np.int8)
-        k1    = k1_spike_vec(s, s_zero, Vth)
+        k1    = k1_out_vec(s, s_zero, Vth)
         dis   = int(np.count_nonzero(exact != k1))
         per_vth.append((Vth, dis, ncombo, 100.0 * dis / ncombo))
         total_pairs += ncombo
@@ -218,14 +226,15 @@ def main():
 
     # report
     lines = []
-    lines.append("Design-2 (K=1 log/LNS) accuracy vs Design-1 (exact multiplier)")
+    lines.append("Design-2 (K=%d log/LNS) accuracy vs Design-1 (exact multiplier)" % K)
     lines.append("=" * 62)
     lines.append("WIDTH=%d  K=%d  VW=%d   Monte-Carlo: %d sampled combos x %d Vth values"
                  % (WIDTH, K, VW, ncombo, len(VTHS)))
-    lines.append("(12-bit space 4096^4 ~ 2.8e14 is not enumerable; rate is a sampled estimate)")
-    lines.append("F(d) ROM (half-log2 units): %s" % FTAB)
+    lines.append("(%d-bit space %d^4 ~ %.1e is not enumerable; rate is a sampled estimate)"
+                 % (WIDTH, IN_MAX + 1, (IN_MAX + 1.0) ** 4))
+    lines.append("F(d) ROM (1/%d-log2 units): %s" % (SCALE, FTAB))
     lines.append("")
-    lines.append("Per-Vth disagreement (spike_k1 != spike_exact):")
+    lines.append("Per-Vth disagreement (out_k1 != out_exact):")
     lines.append("  %-8s %-12s %-12s %s" % ("Vth", "disagree", "total", "rate%"))
     for Vth, dis, tot, rate in per_vth:
         lines.append("  %-8d %-12d %-12d %.4f" % (Vth, dis, tot, rate))
@@ -233,7 +242,7 @@ def main():
     lines.append("OVERALL disagreement rate = %d / %d = %.4f %%"
                  % (total_disagree, total_pairs, disagree_rate))
     lines.append("(This is the accuracy cost of dropping the multiplier. A disagreement")
-    lines.append(" is only an RTL bug if the RTL output != spike_k1 -- checked in Phase 4.)")
+    lines.append(" is only an RTL bug if the RTL output != out_k1 -- checked in Phase 4.)")
     txt = "\n".join(lines) + "\n"
     apath = os.path.join(REPORT, "model_accuracy.txt")
     with open(apath, "w") as f:

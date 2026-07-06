@@ -11,23 +11,23 @@ module tb;
     always #5 clk = ~clk;
 
     // stimulus / expected storage
-    reg  [11:0] Aa[0:MAXV-1], Bb[0:MAXV-1], Cc[0:MAXV-1], Dd[0:MAXV-1];
-    reg  [24:0] Vv[0:MAXV-1];
+    reg  [9:0]  Aa[0:MAXV-1], Bb[0:MAXV-1], Cc[0:MAXV-1], Dd[0:MAXV-1];
+    reg  [20:0] Vv[0:MAXV-1];
     reg         Ee[0:MAXV-1];      // exp_exact
     reg         Ek[0:MAXV-1];      // exp_k1
     integer     NV;
 
     // driven inputs
-    reg  [11:0] A, B, C, D;
-    reg  [24:0] Vth;
+    reg  [9:0]  A, B, C, D;
+    reg  [20:0] Vth;
 
     // DUT outputs
-    wire spike1, spike2;
+    wire out1, out2;
 
-    mult_detector #(.WIDTH(12), .VW(25)) DUT1 (
-        .clk(clk), .A(A), .B(B), .C(C), .D(D), .Vth(Vth), .spike(spike1));
-    log_detector  #(.WIDTH(12), .K(1), .VW(25)) DUT2 (
-        .clk(clk), .A(A), .B(B), .C(C), .D(D), .Vth(Vth), .spike(spike2));
+    mult_detector #(.WIDTH(10), .VW(21)) DUT1 (
+        .clk(clk), .A(A), .B(B), .C(C), .D(D), .Vth(Vth), .out(out1));
+    log_detector  #(.WIDTH(10), .K(2), .VW(21)) DUT2 (
+        .clk(clk), .A(A), .B(B), .C(C), .D(D), .Vth(Vth), .out(out2));
 
     integer fd, r, n, i, k;
     integer err1, err2;
@@ -45,8 +45,8 @@ module tb;
             if (r > 0) begin
                 n = $sscanf(line, "%d,%d,%d,%d,%d,%d,%d", a, b, c, d, vth, ee, ek);
                 if (n == 7) begin
-                    Aa[i]=a[11:0]; Bb[i]=b[11:0]; Cc[i]=c[11:0]; Dd[i]=d[11:0];
-                    Vv[i]=vth[24:0]; Ee[i]=ee[0]; Ek[i]=ek[0];
+                    Aa[i]=a[9:0]; Bb[i]=b[9:0]; Cc[i]=c[9:0]; Dd[i]=d[9:0];
+                    Vv[i]=vth[20:0]; Ee[i]=ee[0]; Ek[i]=ek[0];
                     i = i + 1;
                 end
             end
@@ -65,17 +65,17 @@ module tb;
             end
             if (i >= 2) begin                        // output now reflects vector i-2
                 k = i - 2;
-                if (spike1 !== Ee[k]) begin
+                if (out1 !== Ee[k]) begin
                     err1 = err1 + 1;
                     if (err1 <= 10)
                         $display("  D1 MISMATCH vec %0d A=%0d B=%0d C=%0d D=%0d Vth=%0d  got=%b exp_exact=%b",
-                                 k, Aa[k],Bb[k],Cc[k],Dd[k],Vv[k], spike1, Ee[k]);
+                                 k, Aa[k],Bb[k],Cc[k],Dd[k],Vv[k], out1, Ee[k]);
                 end
-                if (spike2 !== Ek[k]) begin
+                if (out2 !== Ek[k]) begin
                     err2 = err2 + 1;
                     if (err2 <= 10)
                         $display("  D2 MISMATCH vec %0d A=%0d B=%0d C=%0d D=%0d Vth=%0d  got=%b exp_k1=%b",
-                                 k, Aa[k],Bb[k],Cc[k],Dd[k],Vv[k], spike2, Ek[k]);
+                                 k, Aa[k],Bb[k],Cc[k],Dd[k],Vv[k], out2, Ek[k]);
                 end
             end
         end

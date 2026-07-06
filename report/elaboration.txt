@@ -1,21 +1,22 @@
-Phase 3 - RTL elaboration audit (yosys 0.55, pre-techmap)   [WIDTH=12, VW=25]
-============================================================================
+Phase 3 - RTL elaboration audit (yosys 0.55, pre-techmap)   [WIDTH=10, K=2, VW=21]
+==================================================================================
 No latches inferred in either design; Design 2 contains no $mul cells.
-Both designs have identical registered I/O: 4*12 + 25 input + 1 output = 74 flops.
+Both designs have identical registered I/O: 4*10 + 21 input + 1 output = 62 flops.
 
 Design 1  mult_detector  (baseline, exact)
-  $mul   2      <- the two 12x12 multipliers A*B, C*D  (this is the reference)
+  $mul   2      <- the two 10x10 multipliers A*B, C*D  (this is the reference)
   $add   1
   $gt    1
-  $dff   6      (word-level; -> 74 dfxtp_1 after synthesis)
+  $dff   6      (word-level; -> 62 dfxtp_1 after synthesis)
   $dlatch 0     latches: NONE   |  CHECK pass: 0 problems
 
-Design 2  log_detector  (K=1 log/LNS, no multipliers)
+Design 2  log_detector  (K=2 log/LNS, no multipliers)
   $mul   0      <- NO MULTIPLIERS  (key result)
   $dlatch 0     latches: NONE (yosys: "No latch inferred" x14 signals)
   cells (elaborated, flattened):
-    $add 3   $sub 2   $gt 2   $mux 298   $logic_and 69   $logic_not 69
+    $add 3   $sub 2   $gt 2   $mux 311   $logic_and 57   $logic_not 56
     $or 2    $dff 6   $memrd_v2 1 + $meminit 1  <- the F(d) add-correction ROM
 
-Both designs share the same 7-port interface (clk, A,B,C,D, Vth, spike) and the
-same 2-cycle registered-I/O latency.
+Both designs share the same 7-port interface (clk, A,B,C,D, Vth, out) and the
+same 2-cycle registered-I/O latency.  The K=2 converter carries 2 mantissa bits
+(quarter-log2 units); the F(d) ROM has 79 entries (d=0..78), values 0..4.

@@ -160,11 +160,16 @@ def svg(title, pl, ref_x, ref_y, ref_label=None):
     return "\n".join(S)
 
 # ---------------------------------------------------------------------------
+def read_k():
+    m = re.search(r'\bK=(\d+)\b', open(os.path.join(REPORT, "model_accuracy.txt")).read())
+    return int(m.group(1)) if m else 1
+
 def main():
     areas = parse_cell_areas(LIB)
+    kval = read_k()
     designs = [
         ("Design 1 — mult_detector (baseline)", "mult_detector", "mult_detector_netlist.v"),
-        ("Design 2 — log_detector (K=1)",        "log_detector",  "log_detector_netlist.v"),
+        ("Design 2 — log_detector (K=%d)" % kval, "log_detector",  "log_detector_netlist.v"),
     ]
     # place both first, then render both at Design 1's common scale
     placed = []

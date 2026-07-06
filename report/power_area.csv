@@ -1,3 +1,3 @@
 design,cells,area_um2,Ctot_pF,energy_per_op_pJ,power_uW_at_50MHz,x_baseline_power,disagreement_pct_vs_baseline
-mult baseline,1476,12015.274,9.9942,9.7144,485.7205,1.0000,0.0000
-log K=1,416,3569.674,2.5545,2.4830,124.1479,0.2556,5.5996
+mult baseline,1019,8845.984,6.9892,6.7935,339.6735,1.0000,0.0000
+log K=2,483,3761.107,2.9471,2.8646,143.2275,0.4217,2.8382

@@ -1,0 +1,16 @@
+{
+  "//": "OpenLane / LibreLane config for the exact-multiplier baseline (10-bit).",
+  "DESIGN_NAME": "mult_detector",
+  "VERILOG_FILES": ["dir::../rtl/mult_detector.v"],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 20,
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "FP_CORE_UTIL": 45,
+  "PL_TARGET_DENSITY_PCT": 55,
+  "FP_PDN_MULTILAYER": true,
+  "RUN_MAGIC_DRC": true,
+  "RUN_KLAYOUT_DRC": true,
+  "RUN_LVS": true,
+  "MAGIC_DRC_USE_GDS": true
+}

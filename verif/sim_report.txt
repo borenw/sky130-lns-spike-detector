@@ -1,7 +1,7 @@
-TB: loaded 63875 vectors from verif/vectors.csv
+TB: loaded 58139 vectors from verif/vectors.csv
 
 =========================================================
- VERIFICATION SUMMARY  (63875 vectors)
+ VERIFICATION SUMMARY  (58139 vectors)
   Design 1 (mult_detector) vs exp_exact : 0 mismatches  -> PASS
   Design 2 (log_detector)  vs exp_k1    : 0 mismatches  -> PASS
  RESULT: PASS  (both designs bit-exact to their golden model)

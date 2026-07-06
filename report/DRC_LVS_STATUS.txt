@@ -1,0 +1,27 @@
+DRC / LVS / routed-GDS status
+=============================
+STATUS: NOT RUN on this host (honest).  No fabricated "clean" summary is provided.
+
+Why: place-and-route + physical signoff need tools and a physical PDK that are not
+installed on the build host used for this repo:
+  - OpenROAD / OpenLane (place & route)      : not installed
+  - Magic / KLayout      (DRC)               : not installed
+  - Netgen               (LVS)               : not installed
+  - docker / podman / nix / conda / root     : none available
+  - sky130 PHYSICAL PDK (tech-LEF, cell-LEF, cell-GDS, DRC decks, Netgen setup) : absent
+    (only the timing library sky130_fd_sc_hd__tt_025C_1v80.lib is present)
+
+What IS real in this repo (all verified here):
+  - RTL (10-bit, K=2), bit-exact to the golden model over 58,139 vectors  -> PASS
+  - Logical synthesis to sky130 HD cells (area from `stat -liberty`)
+  - Analytic switching-power estimate
+  - Standard-cell FLOORPLAN estimate + bounding-box .gds (synth/*.gds)
+    -> this is NOT a routed layout and is NOT DRC/LVS-checked.
+
+To produce the genuine routed GDS + DRC-clean + LVS-clean signoff:
+  run pnr/run_pnr.sh on a host that has OpenLane 2 (pip install openlane) and the
+  sky130A physical PDK (volare).  See pnr/README.md.  It emits:
+    routed GDS  : runs/*/final/gds/<top>.gds
+    Magic DRC   : runs/*/**/*-drc/reports/drc.rpt   (COUNT: 0 == clean)
+    Netgen LVS  : runs/*/**/*-lvs/reports/lvs.rpt   ('Circuits match uniquely' == clean)
+  Then replace this file with the real clean summary.

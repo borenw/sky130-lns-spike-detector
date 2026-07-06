@@ -17,6 +17,17 @@ import sys as _sys
 _sys.path.insert(0, HERE)
 import model as MODEL      # reuse the golden model for the worked-example table
 
+K      = MODEL.K                                  # fraction bits in the log converter
+WIDTH  = MODEL.WIDTH                              # input bit width
+SCALE  = MODEL.SCALE                              # 2^K : log-value units are 1/SCALE of a log2
+UNITW  = {1: "half", 2: "quarter", 3: "eighth"}.get(K, "1/%d" % SCALE) + "-log₂"
+FBITS  = max(1, (SCALE).bit_length())             # bits to represent an F value (0..SCALE)
+WIDTH_BASE = 1 << WIDTH                            # 2^WIDTH (input-space base, e.g. 1024)
+_p_space   = WIDTH_BASE ** 4
+_exp_space = len(str(_p_space)) - 1
+SPACE_SCI  = "%.1f×10%s" % (_p_space / 10.0 ** _exp_space,
+             str(_exp_space).translate(str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")))
+
 # category -> (label, light hue, dark hue) : same families as the layout SVG
 CATS = [
     ("ff",    "Flip-flops",       "#2a78d6", "#3987e5"),
@@ -83,11 +94,11 @@ svg_log  = open(os.path.join(REPORT, "log_detector_layout.svg")).read()
 
 # vector count (for the footer) and GitHub links base
 nvec = sum(1 for _ in open(os.path.join(ROOT, "verif", "vectors.csv"))) - 1
-REPO      = "https://github.com/borenw/sky130-lns-spike-detector"
+REPO      = "https://github.com/borenw/sky130-lns-mac-detector"
 REPO_BLOB = REPO + "/blob/main"
 REPO_ZIP  = REPO + "/archive/refs/heads/main.zip"
 
-M = pa["mult baseline"]; L = pa["log K=1"]
+M = pa["mult baseline"]; L = pa["log K=%d" % K]
 FM = fp["mult_detector"]; FL = fp["log_detector"]
 
 def f(x): return float(x)
@@ -112,7 +123,7 @@ rows_tbl = [
      "%.3f×" % (f(L["energy_per_op_pJ"])/f(M["energy_per_op_pJ"]))),
     ("Power @ 50 MHz (est.)", "%s µW" % M["power_uW_at_50MHz"], "%s µW" % L["power_uW_at_50MHz"],
      "%.3f× (−%.1f%%)" % (f(L["x_baseline_power"]), pow_save)),
-    ("Accuracy vs exact", "0.00 % (reference)", "%.2f %% disagree" % overall, "K=1 cost"),
+    ("Accuracy vs exact", "0.00 % (reference)", "%.2f %% disagree" % overall, "K=%d cost" % K),
     ("Verification", "PASS (= exp_exact)", "PASS (= exp_k1)", "both bit-exact"),
 ]
 
@@ -197,12 +208,12 @@ def block_diagram():
     P.append(blk(82, 74, 54, 26, ["C × D"], RED))
     P.append(blk(158, 56, 42, 30, ["−"]))
     P.append(blk(224, 54, 72, 34, ["S &gt; Vth"]))
-    P.append(blk(322, 57, 52, 26, ["spike"]))
+    P.append(blk(322, 57, 52, 26, ["out"]))
     # lane 2 : log / LNS -- Vth is a compile-time constant, so w = log₂(2^y + Vth) is a
     # function of y alone: the whole max+F LNS add collapses into a single-input w-ROM
     # (Vth baked into the ROM contents offline, no runtime Vth converter).
     P.append('<text x="14" y="146" font-size="12.5" font-weight="700" fill="var(--ink2)">'
-             '② Log / LNS, K=1</text>')
+             '② Log / LNS, K=%d</text>' % K)
     P.append('<rect x="148" y="133" width="106" height="17" rx="8.5" '
              'fill="rgba(12,163,12,0.14)" stroke="#0ca30c" stroke-width="0.8"/>')
     P.append('<text x="201" y="145" text-anchor="middle" font-size="10" font-weight="600" '
@@ -214,7 +225,7 @@ def block_diagram():
     P.append(arr(104, 166.5, 124, 173)); P.append(arr(104, 191.5, 124, 186))
     P.append(arr(104, 220.5, 124, 227)); P.append(arr(104, 245.5, 124, 240))
     # add1 -> compare (x = log A·B) ; add2 -> w-ROM (y) ;
-    # w-ROM -> compare (w = log₂(2^y + Vth)) ; compare -> spike
+    # w-ROM -> compare (w = log₂(2^y + Vth)) ; compare -> out
     P.append(arr(156, 179, 346, 208, "x"))
     P.append(arr(156, 233, 190, 244, "y"))
     P.append(arr(336, 249, 346, 230, "w"))
@@ -224,12 +235,12 @@ def block_diagram():
         P.append(blk(12, y, 32, 17, [lbl]))
     # per-operand log2 converters (the four parallel paths)
     for y in (158, 183, 212, 237):
-        P.append(blk(52, y, 52, 17, ["log₂·K1"], BLUE))
-    # two log-adders (= LNS multiply); single-input w-ROM (Vth baked in); compare; spike
+        P.append(blk(52, y, 52, 17, ["log₂·K%d" % K], BLUE))
+    # two log-adders (= LNS multiply); single-input w-ROM (Vth baked in); compare; out
     P.append(blk(124, 166, 32, 26, ["+"])); P.append(blk(124, 220, 32, 26, ["+"]))
     P.append(blk(190, 226, 146, 46, ["w-ROM (Vth baked in)", "w = log₂(2ʸ + Vth)"], BLUE))
     P.append(blk(346, 196, 100, 44, ["compare &gt;", "A·B &gt; C·D+Vth"]))
-    P.append(blk(460, 205, 50, 26, ["spike"]))
+    P.append(blk(460, 205, 50, 26, ["out"]))
     P.append('</svg>')
     cap = ('<figcaption>V<sub>th</sub> is constant, so the max + F(|y−v|) LNS adder collapses '
            'into a single-input ROM w = log₂(2<sup>y</sup> + V<sub>th</sub>) — no max, no '
@@ -250,9 +261,9 @@ def rtl_diagram():
              '① Baseline — one file</text>')
     P.append(blk(14, 44, 56, 34, ["A,B,C,D", "Vth"]))
     P.append(arr(70, 61, 120, 61, "Ar…Vr"))
-    P.append(blk(120, 41, 178, 42, ["mult_detector.v", "p1=Ar*Br  p2=Cr*Dr", "S=p1+p2 · spike←(S&gt;Vr)"], RED))
-    P.append(arr(298, 62, 336, 62, "spike"))
-    P.append(blk(336, 49, 54, 26, ["spike"]))
+    P.append(blk(120, 41, 178, 42, ["mult_detector.v", "p1=Ar*Br  p2=Cr*Dr", "S=p1+p2 · out←(S&gt;Vr)"], RED))
+    P.append(arr(298, 62, 336, 62, "out"))
+    P.append(blk(336, 49, 54, 26, ["out"]))
     # lane 2 : log design -- files instantiated inside the top module
     P.append('<text x="14" y="118" font-size="12.5" font-weight="700" fill="var(--ink2)">'
              '② Multiplier-free — log_detector.v  ·  lod5.v · lns_add.v · lns_ftable.v</text>')
@@ -270,8 +281,8 @@ def rtl_diagram():
     P.append(blk(366, 164, 110, 52, ["lns_add.v", "+ lns_ftable.v", "s = max+F"], BLUE))
     P.append(arr(476, 188, 506, 188, "s"))
     P.append(blk(506, 170, 80, 40, ["compare", "+ out reg"]))
-    P.append(arr(586, 188, 618, 188, "spike"))
-    P.append(blk(618, 175, 52, 26, ["spike"]))
+    P.append(arr(586, 188, 618, 188, "out"))
+    P.append(blk(618, 175, 52, 26, ["out"]))
     P.append('</svg>')
     cap = ('<figcaption>The same flow at the <b>RTL level</b>: blocks ending in '
            '<code>.v</code> are actual source files and arrows carry the real signal names. '
@@ -295,32 +306,40 @@ def _k1_row(A, B, C, D, Vth):
     else:         s = max(X, Y) + MODEL.FTAB[abs(X - Y)]
     zv, lv = MODEL.log_k1(Vth)
     S = A * B + C * D
-    Shat = 2.0 ** (s / 2.0)
-    Vhat = 0.0 if zv else 2.0 ** (lv / 2.0)
+    Shat = 2.0 ** (s / float(SCALE))
+    Vhat = 0.0 if zv else 2.0 ** (lv / float(SCALE))
     out_ex = 1 if S > Vth else 0
-    out_k1 = MODEL.spike_k1(A, B, C, D, Vth)
+    out_k1 = MODEL.out_k1(A, B, C, D, Vth)
     err = 100.0 * (Shat - S) / S if S > 0 else 0.0
     return S, Shat, Vhat, err, out_ex, out_k1
 
 EXAMPLES = [(25, 30, 12, 40, 600), (8, 8, 5, 5, 150),
             (50, 50, 20, 20, 2000), (3, 3, 3, 3, 17)]
+# compute once so both the table and the prose note cite the same (K-dependent) numbers
+EX = [dict(A=A, B=B, C=C, D=D, Vth=Vth,
+           S=r[0], Shat=r[1], Vhat=r[2], err=r[3], oe=r[4], ok=r[5], mis=(r[4] != r[5]))
+      for (A, B, C, D, Vth) in EXAMPLES
+      for r in [_k1_row(A, B, C, D, Vth)]]
+MISJ = next(e for e in EX if e["mis"])            # the misjudge row (for the note)
+BIGERR = max((e for e in EX if not e["mis"]),      # a matching row with the largest |err|
+             key=lambda e: abs(e["err"]))
+
 def example_rows():
     out = []
-    for (A, B, C, D, Vth) in EXAMPLES:
-        S, Shat, Vhat, err, oe, ok = _k1_row(A, B, C, D, Vth)
-        mis = (oe != ok)
-        verdict = ('<span class="bad">misjudge ✗</span>' if mis
+    for e in EX:
+        verdict = ('<span class="bad">misjudge ✗</span>' if e["mis"]
                    else '<span class="ok2">match ✓</span>')
         # err% is the OUTPUT error: N/A when the output is correct, shown only on a misjudge
-        err_cell = ('<span class="bad">%+.1f%%</span>' % err if mis
+        err_cell = ('<span class="bad">%+.1f%%</span>' % e["err"] if e["mis"]
                     else '<span class="na">—</span>')
         out.append(
             "<tr%s><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td>"
             "<td>%d</td><td>%d</td>"
             "<td>%.0f</td><td>%s</td><td>%.0f</td><td>%d</td><td class='hl'>%d</td>"
             "<td>%s</td></tr>"
-            % (' class="misrow"' if mis else '', A, B, C, D, Vth, S, A * B - C * D,
-               Shat, err_cell, Vhat, oe, ok, verdict))
+            % (' class="misrow"' if e["mis"] else '', e["A"], e["B"], e["C"], e["D"], e["Vth"],
+               e["S"], e["A"] * e["B"] - e["C"] * e["D"],
+               e["Shat"], err_cell, e["Vhat"], e["oe"], e["ok"], verdict))
     return "".join(out)
 EXROWS = example_rows()
 
@@ -372,16 +391,16 @@ def files_section():
     return "".join(out)
 
 # ---- LNS-add derivation detail (for the deep-dive section) ----
-def _Fd(dh):                       # dh = ROM index in half-log2 units; real d = dh/2
-    d = dh / 2.0
+def _Fd(dh):                       # dh = integer ROM key; real d = dh/SCALE
+    d = dh / float(SCALE)
     real = math.log2(1.0 + 2.0 ** (-d))
-    return real, round(2 * real)
+    return real, int(round(SCALE * real))
 FROWS = "".join(
-    "<tr><td>%.1f</td><td>%.4f</td><td>%d</td></tr>" % (dh / 2.0, _Fd(dh)[0], _Fd(dh)[1])
-    for dh in range(0, 7))
-_mrom = re.search(r'F\(d\) ROM \(half-log2 units\):\s*\[([^\]]*)\]',
+    "<tr><td>%.2f</td><td>%.4f</td><td>%d</td></tr>" % (dh / float(SCALE), _Fd(dh)[0], _Fd(dh)[1])
+    for dh in range(0, 9))
+_mrom = re.search(r'F\(d\) ROM \([^)]*\):\s*\[([^\]]*)\]',
                   open(os.path.join(REPORT, "model_accuracy.txt")).read())
-_romvals = [v.strip() for v in _mrom.group(1).split(",")] if _mrom else ["2", "2", "1", "1", "1", "0"]
+_romvals = [v.strip() for v in _mrom.group(1).split(",")] if _mrom else ["4", "4", "3", "3"]
 ROM_LEN  = len(_romvals)
 ROM_MAXD = ROM_LEN - 1
 ROM_PREVIEW = "[" + ", ".join(_romvals[:9]) + ", …, 0]"
@@ -398,10 +417,13 @@ DERIV = (
 )
 
 # ---- concrete LNS-add walkthrough for worked-example row 1 (C·D = 12·40) ----
-def _wbr(v):                       # (exponent, frac bit, L, binary) for the K=1 converter
+def _wbr(v):                       # (exponent, K-bit frac, L, binary) for the K-bit converter
     e = v.bit_length() - 1
-    frac = 0 if e == 0 else (v >> (e - 1)) & 1
-    return e, frac, 2 * e + frac, format(v, 'b')
+    frac = 0
+    for _i in range(1, K + 1):
+        _pos = e - _i
+        frac |= (((v >> _pos) & 1) if _pos >= 0 else 0) << (K - _i)
+    return e, frac, (e << K) + frac, format(v, 'b')
 
 def _build_walk():
     A, B, C, D, Vth = 25, 30, 12, 40, 600
@@ -409,22 +431,22 @@ def _build_walk():
     eC, fC, LC, bC = _wbr(C); eD, fD, LD, bD = _wbr(D)
     X = LA + LB; Y = LC + LD; d = abs(X - Y)
     F = int(_romvals[d]); s = max(X, Y) + F
-    S = A * B + C * D; Shat = 2 ** (s / 2.0); err = 100.0 * (Shat - S) / S
-    eV, fV, LV, bV = _wbr(Vth); Vhat = 2 ** (LV / 2.0)
+    S = A * B + C * D; Shat = 2 ** (s / float(SCALE)); err = 100.0 * (Shat - S) / S
+    eV, fV, LV, bV = _wbr(Vth); Vhat = 2 ** (LV / float(SCALE))
     oe = 1 if S > Vth else 0; ok = 1 if s > LV else 0
     L = []
-    L.append("  A=%d  B=%d  C=%d  D=%d   (Vth=%d)        logs in half-log2 units" % (A, B, C, D, Vth))
+    L.append("  A=%d  B=%d  C=%d  D=%d   (Vth=%d)        logs in 1/%d-log2 units" % (A, B, C, D, Vth, SCALE))
     L.append("")
-    L.append("  1) log-convert   L(v) = 2*floor(log2 v) + (next bit below the leading 1)")
+    L.append("  1) log-convert   L(v) = %d*floor(log2 v) + (top %d mantissa bits)" % (SCALE, K))
     for v, e, f, Lv_, b in ((A, eA, fA, LA, bA), (B, eB, fB, LB, bB),
                             (C, eC, fC, LC, bC), (D, eD, fD, LD, bD)):
-        L.append("       L(%2d) = 2*%d + %d = %-2d       %d = %sb" % (v, e, f, Lv_, v, b))
+        L.append("       L(%2d) = %d*%d + %d = %-2d       %d = %sb" % (v, SCALE, e, f, Lv_, v, b))
     L.append("")
     L.append("  2) multiply = add the logs   (adding logs multiplies the operands)")
     L.append("       X = L(%d)+L(%d) = %d      ->  A*B ~ 2^(%g) = %.0f     (true %d)"
-             % (A, B, X, X / 2.0, 2 ** (X / 2.0), A * B))
+             % (A, B, X, X / float(SCALE), 2 ** (X / float(SCALE)), A * B))
     L.append("       Y = L(%d)+L(%d) = %d      ->  C*D ~ 2^(%g) = %.0f     (true %d)"
-             % (C, D, Y, Y / 2.0, 2 ** (Y / 2.0), C * D))
+             % (C, D, Y, Y / float(SCALE), 2 ** (Y / float(SCALE)), C * D))
     L.append("")
     L.append("  3) LNS add   (combine the two products, still in the log domain)")
     L.append("       d = |X - Y| = |%d - %d| = %d" % (X, Y, d))
@@ -432,7 +454,7 @@ def _build_walk():
     L.append("       s = max(X,Y) + F(d) = %d + %d = %d" % (max(X, Y), F, s))
     L.append("")
     L.append("  4) result    S_hat = 2^(%g) = %.0f              (true A*B+C*D = %d,  err %+.1f%%)"
-             % (s / 2.0, Shat, S, err))
+             % (s / float(SCALE), Shat, S, err))
     L.append("")
     L.append("  5) compare   Lv = L(%d) = %d  ->  V_hat = %.0f" % (Vth, LV, Vhat))
     L.append("       s=%d %s Lv=%d   ->  out = %d       (exact: %d %s %d -> %d)   %s"
@@ -445,7 +467,7 @@ def _rom_slice():
     rs = []
     for k in range(0, 6):
         val = _romvals[k] if k < len(_romvals) else "0"
-        realF = math.log2(1 + 2 ** (-(k / 2.0)))
+        realF = math.log2(1 + 2 ** (-(k / float(SCALE))))
         used = (k == DUSED)
         note = "← used (d = |X−Y|)" if used else ""
         rs.append("<tr%s><td>%d</td><td>%s</td><td>%.4f</td>"
@@ -458,14 +480,14 @@ ROMSLICE = _rom_slice()
 PAGE = f"""<div class="wrap">
 <header>
   <div class="eyebrow">SkyWater 130 nm · open-source RTL→GDS flow (yosys)</div>
-  <h1>Eliminating Multipliers with K=1 Log / LNS Arithmetic</h1>
+  <h1>Eliminating Multipliers with Log / LNS Arithmetic</h1>
   <p class="sub">A general-purpose look at trading hardware multipliers for a small
   log-domain ROM. Two RTL implementations of the same multiply-compare kernel
-  <code>(A·B + C·D) &gt; V<sub>th</sub></code> (<b>12-bit</b> inputs) — one with real
-  multipliers, one multiplier-free via a K=1 logarithmic (LNS) datapath — synthesized and
+  <code>(A·B + C·D) &gt; V<sub>th</sub></code> (<b>{WIDTH}-bit</b> inputs) — one with real
+  multipliers, one multiplier-free via a K={K} logarithmic (LNS) datapath — synthesized and
   compared on the sky130 HD standard-cell library.</p>
   <div class="takeaway">
-    Dropping the two multipliers for the K=1 log datapath cuts
+    Dropping the two multipliers for the K={K} log datapath cuts
     <b>area {area_save:.0f}%</b> and estimated <b>power {pow_save:.0f}%</b>,
     at a <b>{overall:.2f}% accuracy cost</b> vs. exact math.
   </div>
@@ -491,26 +513,28 @@ PAGE = f"""<div class="wrap">
 <section>
   <h2>Worked examples — where the approximation misjudges</h2>
   <p class="note">Real values through the implemented <code>(A·B + C·D) &gt; V<sub>th</sub></code>
-  build (every number on this page is this add build). <b>Ŝ = 2<sup>s/2</sup></b> is the linear
-  value the K=1 log path represents for A·B+C·D (compare it with S — that gap is the log path's
-  magnitude approximation); <b>V̂ = 2<sup>Lv/2</sup></b> is the log-quantized threshold; the K=1
-  output is (Ŝ &gt; V̂). <b>err%</b> is the <b>output</b> error — <b>N/A when the output is
-  correct</b>, shown only on the row where the approximation flips the decision.</p>
+  build (every number on this page is this add build). <b>Ŝ = 2<sup>s/{SCALE}</sup></b> is the
+  linear value the K={K} log path represents for A·B+C·D (compare it with S — that gap is the log
+  path's magnitude approximation); <b>V̂ = 2<sup>Lv/{SCALE}</sup></b> is the log-quantized
+  threshold; the K={K} output is (Ŝ &gt; V̂). <b>err%</b> is the <b>output</b> error —
+  <b>N/A when the output is correct</b>, shown only on a row where the approximation flips the
+  decision.</p>
   <div class="tablescroll">
   <table>
     <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>V<sub>th</sub></th>
-      <th>S = A·B+C·D</th><th>A·B−C·D</th><th>Ŝ (K=1)</th><th>err %</th><th>V̂ (K=1)</th>
-      <th>out<br>exact</th><th>out<br>K=1</th><th>verdict</th></tr></thead>
+      <th>S = A·B+C·D</th><th>A·B−C·D</th><th>Ŝ (K={K})</th><th>err %</th><th>V̂ (K={K})</th>
+      <th>out<br>exact</th><th>out<br>K={K}</th><th>verdict</th></tr></thead>
     <tbody>{EXROWS}</tbody>
   </table>
   </div>
-  <p class="note"><b>Only the last row misjudges.</b> S = 18 sits just above V<sub>th</sub> = 17,
-  but K=1 rounds A·B+C·D down to Ŝ = 16 and the threshold to V̂ = 16, so 16 &gt; 16 is false —
-  output 0 where exact says 1 (a ~11% under-estimate landing right on the boundary). Note the
-  third row's Ŝ = 2048 is a long way below S = 2900 — a <em>larger</em> magnitude gap — yet it
-  still decides correctly, so its output error is N/A: the approximation only changes the output
-  when it <em>straddles</em> the threshold, which is why the overall disagreement is ~5.6% and
-  concentrates near mid-range V<sub>th</sub>.</p>
+  <p class="note"><b>The highlighted row misjudges.</b> S = {MISJ['S']} sits just above
+  V<sub>th</sub> = {MISJ['Vth']}, but K={K} rounds A·B+C·D down to Ŝ = {MISJ['Shat']:.0f} and the
+  threshold to V̂ = {MISJ['Vhat']:.0f}, so {MISJ['Shat']:.0f} &gt; {MISJ['Vhat']:.0f} is false —
+  output 0 where exact says 1 ({MISJ['err']:+.0f}% under-estimate, landing right on the boundary).
+  Note another row (Ŝ = {BIGERR['Shat']:.0f} vs S = {BIGERR['S']}, {BIGERR['err']:+.0f}%) carries a
+  <em>larger</em> magnitude gap yet still decides correctly, so its output error is N/A: the
+  approximation only changes the output when it <em>straddles</em> the threshold, which is why the
+  overall disagreement is ~{overall:.1f}% and concentrates near mid-range V<sub>th</sub>.</p>
 </section>
 
 <section>
@@ -518,7 +542,7 @@ PAGE = f"""<div class="wrap">
   <p class="note">Exactly what the multiplier-free path does for worked-example row 1
   (A=25, B=30, C=12, D=40): leading-one-detector log conversion (<code>lod5.v</code>),
   log-add = multiply, then the LNS add (<code>lns_add.v</code>) with the F ROM
-  (<code>lns_ftable.v</code>). Logs are in half-log₂ units (integer 2·log₂).</p>
+  (<code>lns_ftable.v</code>). Logs are in {UNITW} units (integer {SCALE}·log₂).</p>
   <div class="deriv"><pre>{WALK}</pre></div>
   <p class="note">The whole LNS add costs just <b>one table lookup</b> — <code>F(d)</code> at
   key <b>d = |X − Y| = {DUSED}</b>. Here is that slice of the actual ROM
@@ -526,7 +550,7 @@ PAGE = f"""<div class="wrap">
   <div class="tablescroll" style="display:inline-block;max-width:100%">
   <table class="ftab">
     <thead><tr><th>d&nbsp;&nbsp;(ROM key)</th><th>F&nbsp;&nbsp;(value)</th>
-      <th>log₂(1+2<sup>−d/2</sup>)</th><th></th></tr></thead>
+      <th>log₂(1+2<sup>−d/{SCALE}</sup>)</th><th></th></tr></thead>
     <tbody>{ROMSLICE}</tbody>
   </table>
   </div>
@@ -535,7 +559,7 @@ PAGE = f"""<div class="wrap">
 <section class="kpis">
   <div class="kpi"><div class="kv">−{area_save:.0f}%</div><div class="kl">standard-cell area</div><div class="ks">{M['area_um2']} → {L['area_um2']} µm²</div></div>
   <div class="kpi"><div class="kv">−{pow_save:.0f}%</div><div class="kl">power @ 50 MHz (est.)</div><div class="ks">{L['x_baseline_power']}× baseline</div></div>
-  <div class="kpi"><div class="kv">{overall:.2f}%</div><div class="kl">disagreement vs exact</div><div class="ks">K=1 accuracy cost</div></div>
+  <div class="kpi"><div class="kv">{overall:.2f}%</div><div class="kl">disagreement vs exact</div><div class="ks">K={K} accuracy cost</div></div>
   <div class="kpi"><div class="kv">0 → 2</div><div class="kl">multipliers → none</div><div class="ks">both verify PASS</div></div>
 </section>
 
@@ -543,7 +567,7 @@ PAGE = f"""<div class="wrap">
   <h2>Comparison</h2>
   <div class="tablescroll">
   <table>
-    <thead><tr><th>Metric</th><th>Design 1 · multiplier</th><th>Design 2 · log K=1</th><th>Design 2 / 1</th></tr></thead>
+    <thead><tr><th>Metric</th><th>Design 1 · multiplier</th><th>Design 2 · log K={K}</th><th>Design 2 / 1</th></tr></thead>
     <tbody>
     {tbl_rows()}
     </tbody>
@@ -587,10 +611,10 @@ PAGE = f"""<div class="wrap">
 </section>
 
 <section>
-  <h2>K=1 accuracy cost — disagreement vs exact</h2>
-  <p class="note">Over 4 M Monte-Carlo samples × each threshold (the 12-bit space,
-  4096⁴ ≈ 2.8×10¹⁴, cannot be enumerated, so this is a sampled estimate).
-  Design 2's RTL is bit-exact to its K=1 model; a disagreement with exact math is the
+  <h2>K={K} accuracy cost — disagreement vs exact</h2>
+  <p class="note">Over 4 M Monte-Carlo samples × each threshold (the {WIDTH}-bit space,
+  {WIDTH_BASE}⁴ ≈ {SPACE_SCI}, cannot be enumerated, so this is a sampled estimate).
+  Design 2's RTL is bit-exact to its K={K} model; a disagreement with exact math is the
   <em>approximation cost</em>, not a bug. Overall = <b>{overall:.2f}%</b>, peaking at
   mid-range thresholds and vanishing at the extremes.</p>
   <div class="vth" data-title="disagreement % by V_th">{vth_bars()}</div>
@@ -614,18 +638,18 @@ PAGE = f"""<div class="wrap">
 
   <div class="tablescroll" style="display:inline-block;max-width:100%">
   <table class="ftab">
-    <thead><tr><th>d = |x−y|</th><th>F(d) = log₂(1+2<sup>−d</sup>)</th><th>stored (½-log₂ units)</th></tr></thead>
+    <thead><tr><th>d = |x−y|</th><th>F(d) = log₂(1+2<sup>−d</sup>)</th><th>stored ({UNITW} units)</th></tr></thead>
     <tbody>{FROWS}</tbody>
   </table>
   </div>
-  <p class="note">Logs are carried in <b>half-log₂ units</b> (the integer 2·log₂), so the ROM is
-  indexed by the integer |X−Y| and outputs round(2·F) — just 0, 1, or 2. The whole table is
-  <code>{ROM_PREVIEW}</code> ({ROM_LEN} entries, d = 0…{ROM_MAXD}), i.e. ~2 bits out. That is the
-  entire “F(d) ROM” drawn in the datapath above.</p>
+  <p class="note">Logs are carried in <b>{UNITW} units</b> (the integer {SCALE}·log₂), so the ROM is
+  indexed by the integer |X−Y| and outputs round({SCALE}·F) — 0…{SCALE}. The whole table is
+  <code>{ROM_PREVIEW}</code> ({ROM_LEN} entries, d = 0…{ROM_MAXD}), i.e. a {FBITS}-bit value. That is
+  the entire “F(d) ROM” drawn in the datapath above.</p>
 
   <p class="note"><b>Subtraction is the hard cousin.</b> A true LNS subtract would use
   F₋(d) = log₂(1 − 2<sup>−d</sup>) (plus a sign bit) — still a 1-input table of |x − y|, but it
-  diverges to −∞ as d → 0 (catastrophic cancellation when A·B ≈ C·D), exactly where K=1 is
+  diverges to −∞ as d → 0 (catastrophic cancellation when A·B ≈ C·D), exactly where a small K is
   weakest. The threshold compare <code>(A·B − C·D) &gt; Vth</code> sidesteps it by rearranging to
   an <b>add</b>, <code>A·B &gt; C·D + Vth</code>, reusing this same
   F(d) = log₂(1 + 2<sup>−d</sup>) ROM.</p>
@@ -744,7 +768,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
 os.makedirs(DOCS, exist_ok=True)
 doc = ("<!doctype html><html lang='en'><head><meta charset='utf-8'>"
        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-       "<title>Eliminating Multipliers with K=1 Log/LNS Arithmetic — sky130</title>"
+       "<title>Eliminating Multipliers with Log/LNS Arithmetic — sky130</title>"
        "<style>%s</style></head><body>%s</body></html>" % (STYLE, PAGE))
 open(os.path.join(DOCS, "index.html"), "w").write(doc)
 print("wrote docs/index.html (%.1f KB)" % (len(doc) / 1024))

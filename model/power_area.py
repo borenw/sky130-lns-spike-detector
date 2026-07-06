@@ -109,8 +109,19 @@ def read_disagreement():
                 return float(m.group(1))
     return None
 
+def read_k():
+    p = os.path.join(REPORT, "model_accuracy.txt")
+    with open(p) as f:
+        for line in f:
+            m = re.search(r'\bK=(\d+)\b', line)
+            if m:
+                return int(m.group(1))
+    return 1
+
 def main():
     caps = parse_liberty_input_caps(LIB)
+    Kval = read_k()
+    LOGLBL = "log K=%d" % Kval
     print("liberty: parsed input-pin caps for %d cells (e.g. nand2_1=%.5f pF, "
           "dfxtp_1=%.5f pF)" % (len(caps),
           caps.get('sky130_fd_sc_hd__nand2_1', float('nan')),
@@ -118,7 +129,7 @@ def main():
 
     designs = [
         ("mult baseline", "mult_detector",  "mult_detector_netlist.v",  "d1_synth.log"),
-        ("log K=1",       "log_detector",   "log_detector_netlist.v",   "d2_synth.log"),
+        (LOGLBL,          "log_detector",   "log_detector_netlist.v",   "d2_synth.log"),
     ]
     dis = read_disagreement()
 
@@ -169,10 +180,10 @@ def main():
               (r["label"], r["cells"], r["area"], r["ctot"], r["e_op"],
                r["power"], r["xbase"], r["dis"]))
     log = rows[1]; base = rows[0]
-    print("\narea  : log K=1 = %.1fx baseline  (%.1f%% smaller)" %
-          (log["area"]/base["area"], 100*(1-log["area"]/base["area"])))
-    print("power : log K=1 = %.3fx baseline  (%.1f%% lower)" %
-          (log["xbase"], 100*(1-log["xbase"])))
+    print("\narea  : %s = %.1fx baseline  (%.1f%% smaller)" %
+          (LOGLBL, log["area"]/base["area"], 100*(1-log["area"]/base["area"])))
+    print("power : %s = %.3fx baseline  (%.1f%% lower)" %
+          (LOGLBL, log["xbase"], 100*(1-log["xbase"])))
     print("cost  : %.2f%% disagreement vs exact" % dis)
 
 if __name__ == "__main__":

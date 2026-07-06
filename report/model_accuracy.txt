@@ -1,24 +1,23 @@
-Design-2 (K=1 log/LNS) accuracy vs Design-1 (exact multiplier)
+Design-2 (K=2 log/LNS) accuracy vs Design-1 (exact multiplier)
 ==============================================================
-WIDTH=12  K=1  VW=25   Monte-Carlo: 4000000 sampled combos x 12 Vth values
-(12-bit space 4096^4 ~ 2.8e14 is not enumerable; rate is a sampled estimate)
-F(d) ROM (half-log2 units): [2, 2, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+WIDTH=10  K=2  VW=21   Monte-Carlo: 4000000 sampled combos x 11 Vth values
+(10-bit space 1024^4 ~ 1.1e+12 is not enumerable; rate is a sampled estimate)
+F(d) ROM (1/4-log2 units): [4, 4, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-Per-Vth disagreement (spike_k1 != spike_exact):
+Per-Vth disagreement (out_k1 != out_exact):
   Vth      disagree     total        rate%
   0        0            4000000      0.0000
   1        0            4000000      0.0000
-  1000     0            4000000      0.0000
-  100000   4144         4000000      0.1036
-  1000000  72152        4000000      1.8038
-  4000000  420328       4000000      10.5082
-  8388608  1345157      4000000      33.6289
-  12000000 513198       4000000      12.8300
-  16769025 212168       4000000      5.3042
-  20000000 106537       4000000      2.6634
-  25000000 14125        4000000      0.3531
-  33538050 0            4000000      0.0000
+  1000     29           4000000      0.0007
+  50000    43132        4000000      1.0783
+  200000   275979       4000000      6.8995
+  500000   473313       4000000      11.8328
+  1046529  161991       4000000      4.0498
+  1048576  254000       4000000      6.3500
+  1400000  39191        4000000      0.9798
+  1800000  1191         4000000      0.0298
+  2093058  0            4000000      0.0000
 
-OVERALL disagreement rate = 2687809 / 48000000 = 5.5996 %
+OVERALL disagreement rate = 1248826 / 44000000 = 2.8382 %
 (This is the accuracy cost of dropping the multiplier. A disagreement
- is only an RTL bug if the RTL output != spike_k1 -- checked in Phase 4.)
+ is only an RTL bug if the RTL output != out_k1 -- checked in Phase 4.)
