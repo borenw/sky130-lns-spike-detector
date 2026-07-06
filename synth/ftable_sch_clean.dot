@@ -1,0 +1,31 @@
+digraph L {
+  rankdir=LR; ranksep=0.55; nodesep=0.16; bgcolor="#fcfcfb";
+  node [fontname="Helvetica", fontsize=11, penwidth=1.1];
+  edge [arrowsize=0.6, color="#8a897f", penwidth=1.1];
+
+  // inputs (the ROM address d = |X-Y|)
+  node [shape=box, style="rounded", color="#2a78d6", fontcolor="#0b0b0b"];
+  d7[label="d[7]"]; d6[label="d[6]"]; d5[label="d[5]"]; d4[label="d[4]"];
+  d3[label="d[3]"]; d2[label="d[2]"]; d1[label="d[1]"];
+
+  // gates (sky130 standard cells)
+  node [shape=box, style="rounded,filled", fillcolor="#eaf1fd", color="#2a78d6", fontcolor="#0b0b0b"];
+  or4  [label="or4_1\n(_0_)"];
+  nor2a[label="nor2_1\n(_1_)"];
+  nor2b[label="nor2_1\n(_2_)"];
+  aoi  [label="a211oi_1\n→ f[0]"];
+  nor3 [label="nor3_1\n→ f[1]"];
+  nor4 [label="nor4_1\n→ f[2]"];
+
+  // outputs (the F value)
+  node [shape=box, style="rounded", fillcolor="#fcfcfb", color="#0ca30c", fontcolor="#0b0b0b"];
+  f0[label="f[0]"]; f1[label="f[1]"]; f2[label="f[2]"]; f3[label="f[3] = 0"];
+
+  d4->or4; d5->or4; d6->or4; d7->or4;
+  d3->nor2a; d1->nor2a;
+  d2->nor2b; d1->nor2b;
+  d2->aoi; d1->aoi; or4->aoi; nor2a->aoi;
+  d3->nor3; or4->nor3; nor2b->nor3;
+  d3->nor4; d2->nor4; d1->nor4; or4->nor4;
+  aoi->f0; nor3->f1; nor4->f2;
+}
