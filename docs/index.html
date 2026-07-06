@@ -49,6 +49,8 @@ td,tbody th{padding:10px 14px;border-bottom:1px solid var(--grid);
 tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
 td.hl{color:var(--accent);font-weight:600}
 td.delta{color:var(--ink2);font-weight:600}
+td.delta.gain,td.hl.gain{color:var(--good)}
+td.delta.loss,td.hl.loss{color:#d03b3b}
 tbody tr.misrow{background:rgba(227,73,72,.09)}
 tbody tr.usedrow{background:rgba(42,120,214,.11)}
 .bad{color:#d03b3b;font-weight:700}
@@ -200,14 +202,14 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   <table>
     <thead><tr><th>Metric</th><th>Design 1 · multiplier</th><th>Design 2 · log K=2</th><th>Design 2 / 1</th></tr></thead>
     <tbody>
-    <tr><th scope='row'>Standard-cell area</th><td>8845.984 µm²</td><td class='hl'>3761.107 µm²</td><td class='delta'>0.425× (−57.5%)</td></tr>
-<tr><th scope='row'>Die size (x × y @65%)</th><td>116.36 × 116.96 µm</td><td class='hl'>75.98 × 76.16 µm</td><td class='delta'>0.425× (−57.5%)</td></tr>
-<tr><th scope='row'>Die area (x·y)</th><td>13609.2 µm²</td><td class='hl'>5786.3 µm²</td><td class='delta'>0.425×</td></tr>
-<tr><th scope='row'>Std-cell count</th><td>1019</td><td class='hl'>483</td><td class='delta'>0.474×</td></tr>
-<tr><th scope='row'>Multipliers ($mul)</th><td>2</td><td class='hl'>0</td><td class='delta'>eliminated</td></tr>
-<tr><th scope='row'>Energy / op (est.)</th><td>6.7935 pJ</td><td class='hl'>2.8646 pJ</td><td class='delta'>0.422×</td></tr>
-<tr><th scope='row'>Power @ 50 MHz (est.)</th><td>339.6735 µW</td><td class='hl'>143.2275 µW</td><td class='delta'>0.422× (−57.8%)</td></tr>
-<tr><th scope='row'>Accuracy vs exact</th><td>0.00 % (reference)</td><td class='hl'>2.84 % disagree</td><td class='delta'>K=2 cost</td></tr>
+    <tr><th scope='row'>Standard-cell area</th><td>8845.984 µm²</td><td class='hl gain'>3761.107 µm²</td><td class='delta gain'>▼ 0.425× (−57.5%)</td></tr>
+<tr><th scope='row'>Die size (x × y @65%)</th><td>116.36 × 116.96 µm</td><td class='hl gain'>75.98 × 76.16 µm</td><td class='delta gain'>▼ 0.425× (−57.5%)</td></tr>
+<tr><th scope='row'>Die area (x·y)</th><td>13609.2 µm²</td><td class='hl gain'>5786.3 µm²</td><td class='delta gain'>▼ 0.425×</td></tr>
+<tr><th scope='row'>Std-cell count</th><td>1019</td><td class='hl gain'>483</td><td class='delta gain'>▼ 0.474×</td></tr>
+<tr><th scope='row'>Multipliers ($mul)</th><td>2</td><td class='hl gain'>0</td><td class='delta gain'>▼ eliminated</td></tr>
+<tr><th scope='row'>Energy / op (est.)</th><td>6.7935 pJ</td><td class='hl gain'>2.8646 pJ</td><td class='delta gain'>▼ 0.422×</td></tr>
+<tr><th scope='row'>Power @ 50 MHz (est.)</th><td>339.6735 µW</td><td class='hl gain'>143.2275 µW</td><td class='delta gain'>▼ 0.422× (−57.8%)</td></tr>
+<tr><th scope='row'>Accuracy vs exact</th><td>0.00 % (reference)</td><td class='hl loss'>2.84 % disagree</td><td class='delta loss'>▲ K=2 cost</td></tr>
 <tr><th scope='row'>Verification</th><td>PASS (= exp_exact)</td><td class='hl'>PASS (= exp_k1)</td><td class='delta'>both bit-exact</td></tr>
     </tbody>
   </table>

@@ -1,5 +1,7 @@
 # Eliminating Multipliers with Log / LNS Arithmetic — SkyWater 130 nm
 
+### ▶ [**View the interactive page**](https://borenw.github.io/sky130-lns-mac-detector/) — rendered HTML (diagrams, tables, worked examples) in your browser
+
 Two RTL designs of the **same function** — `out = (A·B + C·D) > Vth`, with
 **10-bit** inputs (`A,B,C,D` ∈ 0…1023, 21-bit `Vth`) — built, verified,
 synthesized on the open-source **sky130** HD standard-cell library, and compared
@@ -10,7 +12,7 @@ on **area and power**:
   leading-one detector + **2 mantissa bits** (K=2 log2), logs are added, combined with an
   LNS add `s = max(x,y) + F(|x−y|)` (small ROM), and compared in the log domain.
 
-📄 **Live page:** https://borenw.github.io/sky130-lns-mac-detector/ · full writeup in
+📄 **[Live page (rendered)](https://borenw.github.io/sky130-lns-mac-detector/)** · full writeup in
 [`report/SUMMARY.md`](report/SUMMARY.md)
 
 ## Result

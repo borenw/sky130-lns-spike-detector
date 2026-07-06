@@ -108,31 +108,36 @@ die_save  = 100 * (1 - f(FL["die_area_um2"]) / f(FM["die_area_um2"]))
 
 # ---- comparison table rows ----
 def pct(a, b): return "%.3f×" % (f(a) / f(b))
+# each row: (metric, design1, design2, delta, sentiment)  sentiment: good|bad|neutral
 rows_tbl = [
     ("Standard-cell area", "%s µm²" % M["area_um2"], "%s µm²" % L["area_um2"],
-     "%.3f× (−%.1f%%)" % (f(L["area_um2"])/f(M["area_um2"]), area_save)),
+     "%.3f× (−%.1f%%)" % (f(L["area_um2"])/f(M["area_um2"]), area_save), "good"),
     ("Die size (x × y @65%)", "%s × %s µm" % (FM["die_x_um"], FM["die_y_um"]),
      "%s × %s µm" % (FL["die_x_um"], FL["die_y_um"]),
-     "%.3f× (−%.1f%%)" % (f(FL["die_area_um2"])/f(FM["die_area_um2"]), die_save)),
+     "%.3f× (−%.1f%%)" % (f(FL["die_area_um2"])/f(FM["die_area_um2"]), die_save), "good"),
     ("Die area (x·y)", "%s µm²" % FM["die_area_um2"], "%s µm²" % FL["die_area_um2"],
-     "%.3f×" % (f(FL["die_area_um2"])/f(FM["die_area_um2"]))),
+     "%.3f×" % (f(FL["die_area_um2"])/f(FM["die_area_um2"])), "good"),
     ("Std-cell count", M["cells"], L["cells"],
-     "%.3f×" % (f(L["cells"])/f(M["cells"]))),
-    ("Multipliers ($mul)", "2", "0", "eliminated"),
+     "%.3f×" % (f(L["cells"])/f(M["cells"])), "good"),
+    ("Multipliers ($mul)", "2", "0", "eliminated", "good"),
     ("Energy / op (est.)", "%s pJ" % M["energy_per_op_pJ"], "%s pJ" % L["energy_per_op_pJ"],
-     "%.3f×" % (f(L["energy_per_op_pJ"])/f(M["energy_per_op_pJ"]))),
+     "%.3f×" % (f(L["energy_per_op_pJ"])/f(M["energy_per_op_pJ"])), "good"),
     ("Power @ 50 MHz (est.)", "%s µW" % M["power_uW_at_50MHz"], "%s µW" % L["power_uW_at_50MHz"],
-     "%.3f× (−%.1f%%)" % (f(L["x_baseline_power"]), pow_save)),
-    ("Accuracy vs exact", "0.00 % (reference)", "%.2f %% disagree" % overall, "K=%d cost" % K),
-    ("Verification", "PASS (= exp_exact)", "PASS (= exp_k1)", "both bit-exact"),
+     "%.3f× (−%.1f%%)" % (f(L["x_baseline_power"]), pow_save), "good"),
+    ("Accuracy vs exact", "0.00 % (reference)", "%.2f %% disagree" % overall,
+     "K=%d cost" % K, "bad"),
+    ("Verification", "PASS (= exp_exact)", "PASS (= exp_k1)", "both bit-exact", "neutral"),
 ]
+_SENT = {"good": ("delta gain", "▼ "), "bad": ("delta loss", "▲ "), "neutral": ("delta", "")}
 
 def tbl_rows():
     out = []
-    for metric, a, b, delta in rows_tbl:
+    for metric, a, b, delta, sent in rows_tbl:
+        dcls, arrow = _SENT[sent]
+        bcls = "hl gain" if sent == "good" else ("hl loss" if sent == "bad" else "hl")
         out.append(
-            "<tr><th scope='row'>%s</th><td>%s</td><td class='hl'>%s</td>"
-            "<td class='delta'>%s</td></tr>" % (metric, a, b, delta))
+            "<tr><th scope='row'>%s</th><td>%s</td><td class='%s'>%s</td>"
+            "<td class='%s'>%s%s</td></tr>" % (metric, a, bcls, b, dcls, arrow, delta))
     return "\n".join(out)
 
 # ---- cell-composition stacked bars ----
@@ -724,6 +729,8 @@ td,tbody th{padding:10px 14px;border-bottom:1px solid var(--grid);
 tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
 td.hl{color:var(--accent);font-weight:600}
 td.delta{color:var(--ink2);font-weight:600}
+td.delta.gain,td.hl.gain{color:var(--good)}
+td.delta.loss,td.hl.loss{color:#d03b3b}
 tbody tr.misrow{background:rgba(227,73,72,.09)}
 tbody tr.usedrow{background:rgba(42,120,214,.11)}
 .bad{color:#d03b3b;font-weight:700}
