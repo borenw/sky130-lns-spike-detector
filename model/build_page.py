@@ -487,40 +487,53 @@ LAST_NZ = max(d for d, v in enumerate(FTAB) if v > 0)
 XMAX    = min(len(FTAB) - 1, LAST_NZ + 3)
 
 def lut_transfer_svg():
-    W, H = 560, 190
-    ox, oy = 46, 16
-    pw, ph = W - ox - 14, H - oy - 40
-    def X(d): return ox + pw * d / float(XMAX)
-    def Y(v): return oy + ph * (1 - v / float(SCALE))
+    # Vth'(C,D) = log2(1 + 2^(log2 Vth - log2 CD)) plotted vs the input log2(C*D),
+    # for a threshold Vth and for 4x Vth -> shows Vth's impact (a rightward shift).
+    V1 = 256; V2 = 4 * V1
+    v1 = math.log2(V1); v2 = math.log2(V2)
+    x0, x1, ymax = 3.0, 17.0, 7.0
+    W, H = 560, 214
+    ox, oy = 44, 14
+    pw, ph = W - ox - 12, H - oy - 56
+    def X(u): return ox + pw * (u - x0) / (x1 - x0)
+    def Y(val): return oy + ph * (1 - min(val, ymax) / ymax)
+    def vp(u, v): return math.log2(1.0 + 2.0 ** (v - u))
+    ACC, AQ = "var(--accent)", "#199e70"
     S = ['<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg" '
          'font-family="system-ui,-apple-system,Segoe UI,sans-serif">' % (W, H)]
-    for v in range(0, SCALE + 1):                       # y grid + ticks
-        yy = Y(v)
+    for yv in range(0, int(ymax) + 1):                            # y grid + ticks
+        yy = Y(yv)
         S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--grid)" stroke-width="1"/>'
                  % (ox, yy, ox + pw, yy))
         S.append('<text x="%.1f" y="%.1f" text-anchor="end" font-size="10" fill="var(--muted)">%d</text>'
-                 % (ox - 6, yy + 3, v))
-    d = 0
-    while d <= XMAX:                                    # x ticks every 4
-        xx = X(d)
-        S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
-                 % (xx, oy + ph, xx, oy + ph + 4))
-        S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="10" fill="var(--muted)">%d</text>'
-                 % (xx, oy + ph + 16, d))
-        d += 4
+                 % (ox - 6, yy + 3, yv))
+    u = x0
+    while u <= x1 + 1e-6:                                          # x ticks (even ints)
+        if abs(u - round(u)) < 1e-6 and int(round(u)) % 2 == 0:
+            xx = X(u)
+            S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
+                     % (xx, oy + ph, xx, oy + ph + 4))
+            S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="10" fill="var(--muted)">%d</text>'
+                     % (xx, oy + ph + 16, int(round(u))))
+        u += 1
     S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
              % (ox, oy, ox, oy + ph))
     S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
              % (ox, oy + ph, ox + pw, oy + ph))
-    path = "M %.1f %.1f" % (X(0), Y(FTAB[0]))           # staircase
-    for dd in range(1, XMAX + 1):
-        path += " H %.1f V %.1f" % (X(dd), Y(FTAB[dd]))
-    S.append('<path d="%s" fill="none" stroke="var(--accent)" stroke-width="2"/>' % path)
-    for dd in range(0, XMAX + 1):
-        S.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="var(--accent)"/>' % (X(dd), Y(FTAB[dd])))
+    for v, col in ((v1, ACC), (v2, AQ)):                          # the two curves
+        pts, u = [], x0
+        while u <= x1 + 1e-6:
+            pts.append("%.1f,%.1f" % (X(u), Y(vp(u, v))))
+            u += 0.2
+        S.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="2"/>' % (" ".join(pts), col))
+        S.append('<circle cx="%.1f" cy="%.1f" r="3.2" fill="%s"/>' % (X(v), Y(1), col))   # knee: C·D = Vth
+    lx, ly = ox + pw - 196, oy + 10                               # legend (top-right, empty area)
+    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx, ly, lx + 18, ly, ACC))
+    S.append('<text x="%.1f" y="%.1f" font-size="10.5" fill="var(--ink2)">Vth = %d</text>' % (lx + 23, ly + 3, V1))
+    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx + 92, ly, lx + 110, ly, AQ))
+    S.append('<text x="%.1f" y="%.1f" font-size="10.5" fill="var(--ink2)">Vth = %d (4×)</text>' % (lx + 115, ly + 3, V2))
     S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="11" fill="var(--ink2)">'
-             'address  d = | log₂(C·D) − log₂(Vth) |   (%s units)</text>'
-             % (ox + pw / 2, H - 3, UNITW))
+             'input  log₂(C·D)</text>' % (ox + pw / 2, H - 4))
     S.append('<text x="11" y="%.1f" text-anchor="middle" font-size="11" fill="var(--ink2)" '
              'transform="rotate(-90 11 %.1f)">Vth′(C,D)</text>' % (oy + ph / 2, oy + ph / 2))
     S.append('</svg>')
@@ -777,8 +790,14 @@ PAGE = f"""<div class="wrap">
   full A·B+C·D detector the same table combines the two <em>products</em> instead, and when
   C·D &lt; Vth the roles swap so the address stays ≥ 0.</p>
 
-  <h3 class="sub3">Transfer function &nbsp;<span class="fn">Vth′ vs the log-gap</span></h3>
+  <h3 class="sub3">Transfer function &nbsp;<span class="fn">Vth′ vs log₂(C·D), for two thresholds</span></h3>
   <div class="plotcard">{lut_transfer_svg()}</div>
+  <p class="note"><b>Impact of Vth:</b> the LUT is addressed by the log-<em>gap</em>, so raising
+  the threshold just slides where each product lands. <b>4× Vth shifts the curve right by
+  log₂4 = 2</b> (in log₂(C·D)) and lifts Vth′ everywhere — the threshold's log-domain weight
+  grows and its influence reaches larger C·D. The knee (dot) sits at C·D = Vth, where
+  Vth′ = log₂(2) = 1. For C·D ≫ Vth the correction decays to 0 (the sum is just C·D); for
+  C·D ≪ Vth it rises toward log₂(Vth) − log₂(C·D) (the sum is dominated by Vth).</p>
 
   <h3 class="sub3">Truth table &nbsp;<span class="fn">address → Vth′</span> (identical runs collapsed)</h3>
   <div class="tablescroll" style="display:inline-block;max-width:100%">
