@@ -182,7 +182,7 @@ def arr(x1, y1, x2, y2, label=None):
 
 def block_diagram():
     RED, BLUE = "#e34948", "var(--accent)"
-    P = ['<svg viewBox="0 0 520 308" width="100%" xmlns="http://www.w3.org/2000/svg" '
+    P = ['<svg viewBox="0 0 520 284" width="100%" xmlns="http://www.w3.org/2000/svg" '
          'font-family="system-ui,-apple-system,Segoe UI,sans-serif">',
          '<defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6.5" refY="3" '
          'orient="auto"><path d="M0,0 L6.5,3 L0,6 z" fill="var(--muted)"/></marker></defs>']
@@ -198,51 +198,43 @@ def block_diagram():
     P.append(blk(158, 56, 42, 30, ["−"]))
     P.append(blk(224, 54, 72, 34, ["S &gt; Vth"]))
     P.append(blk(322, 57, 52, 26, ["spike"]))
-    # lane 2 : log / LNS -- (A·B − C·D) > Vth  computed as  A·B > C·D + Vth,
-    # so the threshold folds into the LNS add with y, and x goes to the comparator.
+    # lane 2 : log / LNS -- Vth is a compile-time constant, so w = log₂(2^y + Vth) is a
+    # function of y alone: the whole max+F LNS add collapses into a single-input w-ROM
+    # (Vth baked into the ROM contents offline, no runtime Vth converter).
     P.append('<text x="14" y="146" font-size="12.5" font-weight="700" fill="var(--ink2)">'
              '② Log / LNS, K=1</text>')
     P.append('<rect x="148" y="133" width="106" height="17" rx="8.5" '
              'fill="rgba(12,163,12,0.14)" stroke="#0ca30c" stroke-width="0.8"/>')
     P.append('<text x="201" y="145" text-anchor="middle" font-size="10" font-weight="600" '
              'fill="#0ca30c">✓ no × cells</text>')
-    # input -> log2 arrows (4 operands + Vth)
+    # input -> log2 arrows (4 operands; Vth is baked into the ROM, not a runtime input)
     for cy in (166.5, 191.5, 220.5, 245.5):
         P.append(arr(44, cy, 52, cy))
-    P.append(arr(48, 287.5, 52, 287.5))
     # log2 -> adders
     P.append(arr(104, 166.5, 124, 173)); P.append(arr(104, 191.5, 124, 186))
     P.append(arr(104, 220.5, 124, 227)); P.append(arr(104, 245.5, 124, 240))
-    # add1 -> compare (x=log A·B) ; add2 -> LNS (y) ; Vth-log -> LNS (v) ;
-    # LNS -> compare (w=log(C·D+Vth)) ; compare -> spike
+    # add1 -> compare (x = log A·B) ; add2 -> w-ROM (y) ;
+    # w-ROM -> compare (w = log₂(2^y + Vth)) ; compare -> spike
     P.append(arr(156, 179, 346, 208, "x"))
-    P.append(arr(156, 233, 196, 240, "y"))
-    P.append(arr(104, 287.5, 196, 272, "log₂Vth"))
-    P.append(arr(308, 253, 346, 232, "w"))
+    P.append(arr(156, 233, 190, 244, "y"))
+    P.append(arr(336, 249, 346, 230, "w"))
     P.append(arr(446, 218, 460, 218))
-    # input boxes
+    # input boxes (A, B, C, D only -- no runtime Vth)
     for y, lbl in ((158, "A"), (183, "B"), (212, "C"), (237, "D")):
         P.append(blk(12, y, 32, 17, [lbl]))
-    P.append(blk(12, 279, 36, 17, ["Vth"]))
-    # per-operand log2 converters (the 4 parallel paths) + Vth's converter
-    for y in (158, 183, 212, 237, 279):
+    # per-operand log2 converters (the four parallel paths)
+    for y in (158, 183, 212, 237):
         P.append(blk(52, y, 52, 17, ["log₂·K1"], BLUE))
-    # two log-adders (= LNS multiply), the LNS add (folds Vth into C·D), compare, spike
+    # two log-adders (= LNS multiply); single-input w-ROM (Vth baked in); compare; spike
     P.append(blk(124, 166, 32, 26, ["+"])); P.append(blk(124, 220, 32, 26, ["+"]))
-    P.append(blk(196, 224, 112, 58, ["LNS add", "w = log₂(C·D+Vth)", "max(y,v)+F(|y−v|)"], BLUE))
+    P.append(blk(190, 226, 146, 46, ["w-ROM (Vth baked in)", "w = log₂(2ʸ + Vth)"], BLUE))
     P.append(blk(346, 196, 100, 44, ["compare &gt;", "A·B &gt; C·D+Vth"]))
     P.append(blk(460, 205, 50, 26, ["spike"]))
     P.append('</svg>')
-    cap = ('<figcaption><b>Target use case: spike = (A·B − C·D) &gt; Vth.</b> Subtracting in '
-           'the log domain is LNS&#39;s weak spot (it needs a sign bit and a ROM that '
-           'blows up at cancellation), so rearrange to <b>A·B &gt; C·D + Vth</b>: the '
-           'LNS add folds the threshold into the C·D term — Vth&#39;s log indexes the same '
-           'F = log₂(1+2<sup>−d</sup>) ROM via |y−v| — and a comparator tests '
-           'x = log₂(A·B) against w = log₂(C·D+Vth). At Vth=0 this is just x &gt; y, the '
-           'monotonic-log sign of A·B − C·D (no ROM). <i>Note: the synthesized netlists and '
-           'every number on this page are the closely related A·B + C·D build — same '
-           'datapath, threshold folded into the LNS add instead of a bare comparator.</i>'
-           '</figcaption>')
+    cap = ('<figcaption>V<sub>th</sub> is constant, so the max + F(|y−v|) LNS adder collapses '
+           'into a single-input ROM w = log₂(2<sup>y</sup> + V<sub>th</sub>) — no max, no '
+           'subtract, no runtime V<sub>th</sub> converter. Trade-off: the threshold is frozen '
+           'into the ROM; reprogramming it means reloading the ROM.</figcaption>')
     return '<figure class="bd">' + "".join(P) + cap + '</figure>'
 
 def rtl_diagram():
