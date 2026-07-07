@@ -57,6 +57,23 @@ iverilog -g2012 -o verif/tb_sweep_sub.vvp verif/tb_sweep_sub.v \
     rtl/mult_sub.v rtl/log_sub.v rtl/lod5.v rtl/lns_add.v rtl/lns_ftable.v
 vvp verif/tb_sweep_sub.vvp
 
+echo "== Phase 4d: repeat subtraction sweep at K=3 (F-ROM swapped, then restored) =="
+cp rtl/lns_ftable.v /tmp/_ftab_k2.v
+python3 -c "import sys;sys.path.insert(0,'model');import model as m;m.K=3;m.SCALE=8;m.DMAX=2*(m.SCALE*(m.WIDTH-1)+(m.SCALE-1));m.FTAB=m.build_ftab(m.DMAX);m.emit_ftable_v()"
+sed -e 's/\.K(2)/.K(3)/' -e 's/sweep_sub_rtl\.csv/sweep_sub_rtl_k3.csv/' verif/tb_sweep_sub.v > verif/tb_sweep_sub_k3.v
+iverilog -g2012 -o verif/tb_sweep_sub_k3.vvp verif/tb_sweep_sub_k3.v \
+    rtl/mult_sub.v rtl/log_sub.v rtl/lod5.v rtl/lns_add.v rtl/lns_ftable.v
+vvp verif/tb_sweep_sub_k3.vvp
+cp /tmp/_ftab_k2.v rtl/lns_ftable.v                     # restore the committed K=2 F-ROM
+python3 - <<'PY'
+import csv
+a=list(csv.DictReader(open('verif/sweep_sub_rtl.csv'))); b=list(csv.DictReader(open('verif/sweep_sub_rtl_k3.csv')))
+for x,y in zip(a,b): x['out_log_k3']=y['out_log']
+cols=['sid','A','B','C','D','Vth','out_mult','out_log','out_log_k3']
+with open('verif/sweep_sub_rtl.csv','w',newline='') as f:
+    w=csv.DictWriter(f,fieldnames=cols); w.writeheader(); w.writerows(a)
+PY
+
 echo "== Phase 5: synthesis =="
 yosys -s synth/run_mult.ys > synth/d1_synth.log 2>&1
 yosys -s synth/run_log.ys  > synth/d2_synth.log 2>&1

@@ -685,6 +685,7 @@ def _read_sweep_sub():
     try:
         for r in csv.DictReader(open(os.path.join(ROOT, "verif", "sweep_sub_rtl.csv"))):
             by[int(r["sid"])].append((int(r["Vth"]), int(r["out_mult"]), int(r["out_log"]),
+                                      int(r.get("out_log_k3", r["out_log"])),
                                       int(r["A"]), int(r["B"]), int(r["C"]), int(r["D"])))
         for k in by:
             by[k].sort()
@@ -694,7 +695,7 @@ def _read_sweep_sub():
 SWEEP_SUB = _read_sweep_sub()
 
 def _sub_mini(rows):
-    A, B, C, D = rows[0][3], rows[0][4], rows[0][5], rows[0][6]
+    A, B, C, D = rows[0][4], rows[0][5], rows[0][6], rows[0][7]
     Sv = A * B - C * D
     mf = next((v for v, mm, ll, *_ in rows if mm == 0), None)
     lf = next((v for v, mm, ll, *_ in rows if ll == 0), None)
@@ -705,7 +706,7 @@ def _sub_mini(rows):
     def X(v): return ox + pw * (min(max(v, xlo), xhi) - xlo) / (xhi - xlo)
     yhi, ylo = oy + ph * 0.22, oy + ph * 0.80
     def YL(val, off): return (yhi if val else ylo) - off
-    ACC, AQ = "var(--accent)", "#199e70"
+    ACC, AQ, K3 = "var(--accent)", "#199e70", "#8a5cf0"
     P = ['<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg" '
          'font-family="system-ui,-apple-system,Segoe UI,sans-serif">' % (W, H)]
     P.append('<text x="8" y="14" font-size="11.5" font-weight="600" fill="var(--ink)">%d,%d,%d,%d</text>'
@@ -737,7 +738,7 @@ def _sub_mini(rows):
                  % (xx, oy + ph, xx, oy + ph + 4))
         P.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9" fill="var(--muted)">%d</text>'
                  % (xx, oy + ph + 14, tv))
-    for idx, col, off in ((1, ACC, 0), (2, AQ, 6)):
+    for idx, col, off in ((1, ACC, 0), (2, AQ, 6), (3, K3, 12)):
         vis = [r for r in rows if xlo <= r[0] <= xhi] or rows
         pth = "M %.1f %.1f" % (X(vis[0][0]), YL(vis[0][idx], off))
         for r in vis[1:]:
@@ -939,12 +940,15 @@ PAGE = f"""<div class="wrap">
   <p class="note">Same idea for the <b>subtraction</b> kernel, from RTL simulation
   (<code>verif/tb_sweep_sub.v</code> drives <code>mult_sub.v</code> and <code>log_sub.v</code>; the
   log design uses the rearrangement <code>A·B &gt; C·D + Vth</code>, and both are verified bit-exact
-  to the golden model). Each panel sweeps V<sub>th</sub> and overlays the two 1-bit outputs — the
-  classic flips exactly at V<sub>th</sub> = A·B−C·D, the log/LNS at its approximation; the shaded band
-  is where they disagree.</p>
+  to the golden model). Each panel sweeps V<sub>th</sub> and overlays the classic exact output against
+  the log/LNS at <b>K=2 and K=3</b> — the classic flips exactly at V<sub>th</sub> = A·B−C·D, the log
+  designs at their approximations; the shaded band is the K=2 disagreement. <b>K=3 lands closer to
+  the exact flip</b> (aggregate error band ~32% narrower), for +1 helper bit (≈ +8 pts of the
+  multiplier's area — see the Accuracy-vs-K table).</p>
   <div class="leg2"><span><i style="background:var(--accent)"></i>classic (multiplier)</span>
     <span><i style="background:#199e70"></i>log / LNS (K=2)</span>
-    <span><i class="band"></i>disagree</span></div>
+    <span><i style="background:#8a5cf0"></i>log / LNS (K=3)</span>
+    <span><i class="band"></i>disagree (K=2)</span></div>
   {sweep_sub_plots()}
   <p class="note"><b>Cancellation</b> sets the accuracy: when A·B and C·D are both large but their
   difference is small — <b>60,60,50,50</b> (3600−2500) or <b>25,30,12,40</b> — the log path is well
