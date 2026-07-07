@@ -21,6 +21,19 @@ iverilog -g2012 -o verif/tb.vvp verif/tb.v \
 vvp verif/tb.vvp | tee verif/sim_report.txt
 grep -q "RESULT: PASS" verif/sim_report.txt || { echo "VERIFY FAILED"; exit 1; }
 
+echo "== Phase 4b: RTL Vth sweep (A,B,C,D=25,30,12,40) =="
+python3 - <<'PY'
+vs=[]; v=60
+while v<1000: vs.append(v); v+=20
+while v<=1300: vs.append(v); v+=1
+v=1340
+while v<=6000: vs.append(v); v+=40
+open('verif/sweep_vth.txt','w').write('\n'.join(map(str,vs))+'\n')
+PY
+iverilog -g2012 -o verif/tb_sweep.vvp verif/tb_sweep.v \
+    rtl/mult_detector.v rtl/log_detector.v rtl/lod5.v rtl/lns_add.v rtl/lns_ftable.v
+vvp verif/tb_sweep.vvp
+
 echo "== Phase 5: synthesis =="
 yosys -s synth/run_mult.ys > synth/d1_synth.log 2>&1
 yosys -s synth/run_log.ys  > synth/d2_synth.log 2>&1

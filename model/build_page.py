@@ -609,6 +609,75 @@ LUT_DERIV = html.escape(
     "\n"
     "  since   log₂(C·D) + log₂(1 + Vth/(C·D))  =  log₂(C·D + Vth)")
 
+# ---- RTL Vth-sweep: comparator output, classic multiplier vs log/LNS (from simulation) ----
+def _read_sweep():
+    try:
+        rows = list(csv.DictReader(open(os.path.join(ROOT, "verif", "sweep_rtl.csv"))))
+        return [(int(r["Vth"]), int(r["out_mult"]), int(r["out_log"])) for r in rows]
+    except Exception:
+        return []
+SWEEP = _read_sweep()
+
+def sweep_plot_svg():
+    if not SWEEP:
+        return "<p class='note'>(no sweep data — run <code>verif/tb_sweep</code>)</p>"
+    xs = [v for v, _, _ in SWEEP]
+    lo, hi = min(xs), max(xs)
+    x0, x1 = math.log2(lo), math.log2(hi)
+    W, H = 560, 220
+    ox, oy = 30, 30
+    pw, ph = W - ox - 14, H - oy - 46
+    def X(vth): return ox + pw * (math.log2(vth) - x0) / (x1 - x0)
+    yhi, ylo = oy + ph * 0.18, oy + ph * 0.82
+    def YL(val, off): return (yhi if val else ylo) - off
+    ACC, AQ, RED = "var(--accent)", "#199e70", "#d03b3b"
+    S = ['<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg" '
+         'font-family="system-ui,-apple-system,Segoe UI,sans-serif">' % (W, H)]
+    # disagreement band (where the two outputs differ)
+    dis = [v for v, m, l in SWEEP if m != l]
+    if dis:
+        bx0, bx1 = X(min(dis)), X(max(dis))
+        S.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="rgba(208,59,59,0.13)"/>'
+                 % (bx0, oy, max(2, bx1 - bx0), ph))
+        S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9.5" fill="%s">'
+                 'disagree</text>' % ((bx0 + bx1) / 2, oy - 4, RED))
+    for val in (1, 0):                                             # output level guides
+        yy = YL(val, 0)
+        S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--grid)" '
+                 'stroke-width="1" stroke-dasharray="2 3"/>' % (ox, yy, ox + pw, yy))
+        S.append('<text x="%.1f" y="%.1f" text-anchor="end" font-size="9.5" fill="var(--muted)">%d</text>'
+                 % (ox - 5, yy + 3, val))
+    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
+             % (ox, oy + ph, ox + pw, oy + ph))
+    for tv in (60, 100, 200, 500, 1000, 2000, 5000):              # x ticks (nice Vth values)
+        if lo <= tv <= hi:
+            xx = X(tv)
+            S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
+                     % (xx, oy + ph, xx, oy + ph + 4))
+            S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9.5" fill="var(--muted)">%d</text>'
+                     % (xx, oy + ph + 15, tv))
+    for idx, col, off in ((1, ACC, 0), (2, AQ, 7)):               # the two step outputs
+        pth = "M %.1f %.1f" % (X(SWEEP[0][0]), YL(SWEEP[0][idx], off))
+        for k in range(1, len(SWEEP)):
+            pth += " H %.1f V %.1f" % (X(SWEEP[k][0]), YL(SWEEP[k][idx], off))
+        S.append('<path d="%s" fill="none" stroke="%s" stroke-width="2"/>' % (pth, col))
+    mflip = next((v for v, m, l in SWEEP if m == 0), None)        # flip Vth of each
+    lflip = next((v for v, m, l in SWEEP if l == 0), None)
+    for fv, col in ((lflip, AQ), (mflip, ACC)):
+        if fv:
+            S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="1" '
+                     'stroke-dasharray="3 2" opacity="0.7"/>' % (X(fv), oy, X(fv), oy + ph, col))
+    # legend
+    lx, ly = ox + 20, oy + 6
+    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx, ly, lx + 18, ly, ACC))
+    S.append('<text x="%.1f" y="%.1f" font-size="10" fill="var(--ink2)">classic (multiplier), flips @%d</text>' % (lx + 23, ly + 3, mflip))
+    S.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" stroke-width="2.4"/>' % (lx, ly + 15, lx + 18, ly + 15, AQ))
+    S.append('<text x="%.1f" y="%.1f" font-size="10" fill="var(--ink2)">log / LNS K=2, flips @%d</text>' % (lx + 23, ly + 18, lflip))
+    S.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="11" fill="var(--ink2)">'
+             'threshold  Vth   (log scale)</text>' % (ox + pw / 2, H - 4))
+    S.append('</svg>')
+    return "".join(S)
+
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
 <header>
@@ -691,6 +760,20 @@ PAGE = f"""<div class="wrap">
     <tbody>{ROMSLICE}</tbody>
   </table>
   </div>
+</section>
+
+<section>
+  <h2>RTL sweep — comparator output vs V<sub>th</sub> &nbsp;<span class="fn">A,B,C,D = 25,30,12,40</span></h2>
+  <p class="note">Same worked-example inputs (exact A·B+C·D = <b>1230</b>), swept over
+  V<sub>th</sub> = 60…6000 and driven through <b>both RTL designs in Icarus Verilog</b>
+  (<code>verif/tb_sweep.v</code>). Each step is the design's registered 1-bit output.</p>
+  <div class="plotcard">{sweep_plot_svg()}</div>
+  <p class="note">Both read <b>1</b> for small V<sub>th</sub> and <b>0</b> for large V<sub>th</sub>.
+  The <b>classic multiplier flips exactly at V<sub>th</sub> = 1230</b> (= A·B+C·D). The
+  <b>K=2 log design flips at V<sub>th</sub> = 1024</b> — its quantized Ŝ. In the shaded band
+  <b>1024 ≤ V<sub>th</sub> &lt; 1230</b> the two <em>disagree</em> (log says 0, exact says 1): that
+  is the K=2 approximation cost for this input, made concrete by simulation. Elsewhere they
+  agree. Everything else (area, power, ports) is unchanged — only the decision boundary moves.</p>
 </section>
 
 <section class="kpis">
