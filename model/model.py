@@ -118,6 +118,18 @@ def sub_k2(A, B, C, D, Vth):               # bit-exact spec of rtl/log_sub.v
     return 1 if X > w else 0
 
 # ---------------------------------------------------------------------------
+# Vth′(C,D) block spec (bit-exact to rtl/vth_prime.v):
+#   Vth′ = max(0,g) + F(|g|),  g = log2(Vth) − log2(C·D),  all K-bit log values.
+# ---------------------------------------------------------------------------
+def vthp_model(C, D, Vth):
+    _, Lc = log_k1(C); _, Ld = log_k1(D); _, Lv = log_k1(Vth)
+    Lcd = Lc + Ld
+    if Lv > Lcd:  d = Lv - Lcd; relu = Lv - Lcd
+    else:         d = Lcd - Lv; relu = 0
+    Fd = FTAB[d] if d < len(FTAB) else 0
+    return relu + Fd
+
+# ---------------------------------------------------------------------------
 # Emit rtl/lns_ftable.v from FTAB (single source of truth).
 # ---------------------------------------------------------------------------
 def emit_ftable_v():

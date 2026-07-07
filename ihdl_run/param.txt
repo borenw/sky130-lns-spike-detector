@@ -1,0 +1,9 @@
+dest_sch_lib := myLib
+ref_lib_list := tcb018gbwp7t, basic
+structural_views := 1
+schematic_view_name := schematic
+symbol_view_name := symbol
+import_if_exists := 1
+overwrite_symbol := 3
+log_file_name := ./vin.log
+work_area := ./work

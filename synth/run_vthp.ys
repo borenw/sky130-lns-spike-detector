@@ -1,0 +1,10 @@
+read_verilog -sv rtl/vth_prime.v rtl/lod5.v rtl/lns_ftable.v
+hierarchy -top vth_prime
+synth -top vth_prime -flatten
+abc -liberty /usr/local/packages/tsmc_18m/ip/digital/Front_End/timing_power_noise/NLDM/tcb018gbwp7t_270a/tcb018gbwp7ttc.lib
+opt_clean -purge
+clean -purge
+setundef -zero
+delete t:$scopeinfo
+stat -liberty /usr/local/packages/tsmc_18m/ip/digital/Front_End/timing_power_noise/NLDM/tcb018gbwp7t_270a/tcb018gbwp7ttc.lib
+write_verilog -noattr -nodec synth/vth_prime_tcb018.v
