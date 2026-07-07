@@ -122,7 +122,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   <div class="toprow">
     <div class="eyebrow">SkyWater 130 nm · open-source RTL→GDS flow (yosys)</div>
     <a class="rev" href="https://github.com/borenw/sky130-lns-mac-detector/commits/main" title="revision history — built from this commit">
-      <span class="revdot"></span>rev r22 · 00bf117 · 2026-07-06</a>
+      <span class="revdot"></span>rev r23 · 8e34cdf · 2026-07-06</a>
   </div>
   <h1>Eliminating Multipliers with Log / LNS Arithmetic</h1>
   <p class="sub">A general-purpose look at trading hardware multipliers for a small
@@ -279,19 +279,23 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   directly from the K-bit converter over the 10-bit input range. This build ships <b>K = 2</b>.</p>
   <div class="tablescroll" style="display:inline-block;max-width:100%">
     <table class="ftab"><thead><tr>
-      <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th><th>log resolution 2<sup>−K</sup></th>
+      <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th>
       <th>worst-case error<br>(% of full scale)</th><th>mean error</th>
+      <th>disagreement<br>(measured, A·B+C·D)</th>
       <th>area vs multiplier<br>(sky130, synth)</th></tr></thead>
-    <tbody><tr><td>0</td><td>1</td><td>1</td><td>50.0%</td><td>30.4%</td><td>25.4%</td></tr><tr><td>1</td><td>2</td><td>0.5</td><td>33.2%</td><td>18.5%</td><td>35.3%</td></tr><tr class="lit"><td>2</td><td>4</td><td>0.25</td><td>20.6%</td><td>11.5%</td><td>42.6%</td></tr><tr><td>3</td><td>8</td><td>0.125</td><td>13.4%</td><td>7.7%</td><td>50.2%</td></tr><tr><td>4</td><td>16</td><td>0.0625</td><td>9.7%</td><td>5.7%</td><td>58.9%&nbsp;<sup>est</sup></td></tr></tbody></table>
+    <tbody><tr><td>0</td><td>1</td><td>50.0%</td><td>30.4%</td><td>6.481%</td><td>25.4%</td></tr><tr><td>1</td><td>2</td><td>33.2%</td><td>18.5%</td><td>4.578%</td><td>35.3%</td></tr><tr class="lit"><td>2</td><td>4</td><td>20.6%</td><td>11.5%</td><td>2.838%</td><td>42.6%</td></tr><tr><td>3</td><td>8</td><td>13.4%</td><td>7.7%</td><td>2.024%</td><td>50.2%</td></tr><tr><td>4</td><td>16</td><td>9.7%</td><td>5.7%</td><td>1.317%</td><td>58.9%&nbsp;<sup>est</sup></td></tr></tbody></table>
   </div>
-  <p class="note">The last column is the <b>real synthesized standard-cell area of the log design as a
-  percentage of the multiplier baseline</b> (8845.984 µm²) — each K re-synthesized to sky130 with
-  its own F-ROM (<code>scripts/area_vs_k.py</code>). Accuracy and area pull opposite ways: each helper
-  bit roughly cuts the error by a third but adds one bit to every log bus and ROM address, so area
-  climbs ~linearly (≈ +7–8 pts/bit) yet stays well under the multiplier through K = 4. <b>K = 0</b> is
-  exponent-only (a factor-of-2 grid, but a quarter the area); <b>K = 2</b> (this build, highlighted)
-  sits at ~20% worst-case error for ~43% of the multiplier's area. <sup>est</sup> = extrapolated
-  (the shared 8-bit buses synthesize cleanly only through K = 3).</p>
+  <p class="note">Three views of the same knob. <b>Worst-case / mean error</b> are the K-bit log
+  converter's value-representation error (analytic, over the 10-bit range) — the theoretical
+  bound as a fraction of full-scale V<sub>th</sub>. <b>Disagreement</b> is the <em>measured</em>
+  end-to-end miss rate — how often <code>out</code> flips vs. exact <code>(A·B+C·D) &gt; Vth</code>
+  over a 4 M-combo Monte-Carlo (same method as the headline; K = 2 reproduces 2.84%). It is
+  far below the worst-case bound because most inputs sit nowhere near the boundary. <b>Area</b> is the
+  real synthesized log-design cell area as a % of the multiplier baseline (8845.984 µm²), each K
+  re-synthesized with its own F-ROM (<code>scripts/area_vs_k.py</code>, <code>disagree_vs_k.py</code>).
+  Accuracy and area pull opposite ways — each helper bit cuts the miss rate but adds ~7–8 pts of area,
+  yet the log design stays well under the multiplier through K = 4. <b>K = 2</b> (this build) is
+  highlighted; <sup>est</sup> = area extrapolated (8-bit buses synthesize cleanly only through K = 3).</p>
 </section>
 
 <section class="kpis">

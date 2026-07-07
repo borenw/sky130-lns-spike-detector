@@ -762,6 +762,14 @@ def _area_vs_k():
         return {}
 AREA_K = _area_vs_k()
 
+def _disagree_vs_k():
+    try:
+        return {int(r["K"]): r["disagree_pct"]
+                for r in read_csv(os.path.join(REPORT, "disagree_vs_k.csv"))}
+    except Exception:
+        return {}
+DIS_K = _disagree_vs_k()
+
 def k_error_table():
     body = []
     for K in range(0, 5):
@@ -779,9 +787,12 @@ def k_error_table():
         mean = sum(errs) / len(errs) * 100.0
         apct, src = AREA_K.get(K, ("—", ""))
         area_cell = ("%s%%" % apct) + ("&nbsp;<sup>est</sup>" if src == "estimate" else "")
+        dis = DIS_K.get(K, "—")
+        dis_cell = ("%s%%" % dis) if dis != "—" else "—"
         lit = ' class="lit"' if K == MODEL.K else ''
-        body.append('<tr%s><td>%d</td><td>%d</td><td>%.4g</td><td>%.1f%%</td><td>%.1f%%</td>'
-                    '<td>%s</td></tr>' % (lit, K, SC, 1.0 / SC, mx, mean, area_cell))
+        body.append('<tr%s><td>%d</td><td>%d</td><td>%.1f%%</td><td>%.1f%%</td>'
+                    '<td>%s</td><td>%s</td></tr>'
+                    % (lit, K, SC, mx, mean, dis_cell, area_cell))
     return "".join(body)
 
 # ---------------------------------------------------------------------------
@@ -927,19 +938,23 @@ PAGE = f"""<div class="wrap">
   directly from the K-bit converter over the {WIDTH}-bit input range. This build ships <b>K = {K}</b>.</p>
   <div class="tablescroll" style="display:inline-block;max-width:100%">
     <table class="ftab"><thead><tr>
-      <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th><th>log resolution 2<sup>−K</sup></th>
+      <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th>
       <th>worst-case error<br>(% of full scale)</th><th>mean error</th>
+      <th>disagreement<br>(measured, A·B+C·D)</th>
       <th>area vs multiplier<br>(sky130, synth)</th></tr></thead>
     <tbody>{k_error_table()}</tbody></table>
   </div>
-  <p class="note">The last column is the <b>real synthesized standard-cell area of the log design as a
-  percentage of the multiplier baseline</b> ({M['area_um2']} µm²) — each K re-synthesized to sky130 with
-  its own F-ROM (<code>scripts/area_vs_k.py</code>). Accuracy and area pull opposite ways: each helper
-  bit roughly cuts the error by a third but adds one bit to every log bus and ROM address, so area
-  climbs ~linearly (≈ +7–8 pts/bit) yet stays well under the multiplier through K = 4. <b>K = 0</b> is
-  exponent-only (a factor-of-2 grid, but a quarter the area); <b>K = {K}</b> (this build, highlighted)
-  sits at ~20% worst-case error for ~43% of the multiplier's area. <sup>est</sup> = extrapolated
-  (the shared 8-bit buses synthesize cleanly only through K = 3).</p>
+  <p class="note">Three views of the same knob. <b>Worst-case / mean error</b> are the K-bit log
+  converter's value-representation error (analytic, over the {WIDTH}-bit range) — the theoretical
+  bound as a fraction of full-scale V<sub>th</sub>. <b>Disagreement</b> is the <em>measured</em>
+  end-to-end miss rate — how often <code>out</code> flips vs. exact <code>(A·B+C·D) &gt; Vth</code>
+  over a 4 M-combo Monte-Carlo (same method as the headline; K = {K} reproduces {overall:.2f}%). It is
+  far below the worst-case bound because most inputs sit nowhere near the boundary. <b>Area</b> is the
+  real synthesized log-design cell area as a % of the multiplier baseline ({M['area_um2']} µm²), each K
+  re-synthesized with its own F-ROM (<code>scripts/area_vs_k.py</code>, <code>disagree_vs_k.py</code>).
+  Accuracy and area pull opposite ways — each helper bit cuts the miss rate but adds ~7–8 pts of area,
+  yet the log design stays well under the multiplier through K = 4. <b>K = {K}</b> (this build) is
+  highlighted; <sup>est</sup> = area extrapolated (8-bit buses synthesize cleanly only through K = 3).</p>
 </section>
 
 <section class="kpis">

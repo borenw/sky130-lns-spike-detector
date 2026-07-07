@@ -65,6 +65,8 @@ done
 
 echo "== Phase 5b: area vs K (re-synthesize log_detector for K=0..3) =="
 python3 scripts/area_vs_k.py
+echo "== Phase 5c: disagreement vs K (Monte-Carlo, K=0..4) =="
+python3 scripts/disagree_vs_k.py
 
 echo "== Phase 6: power + area =="
 python3 model/power_area.py
