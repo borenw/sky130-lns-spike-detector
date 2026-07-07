@@ -6,3 +6,8 @@ virtuoso/lns_lib/
 virtuoso/ocean_results/
 virtuoso/*.cdslck
 virtuoso/CDS.log
+wave_run/tranAn.*
+wave_run/logFile
+wave_run/spectre.out
+wave_run/sv.log
+wave_ascii/

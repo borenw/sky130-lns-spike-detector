@@ -1,0 +1,17 @@
+// tb_wave.scs -- transient: ramp Vth 0->2000 over 2ms; compare both .va models.
+// Vth(t)=1e6*t, so outM (exact) flips at t=1.230ms, outL (log/LNS K=2) at t=1.024ms.
+simulator lang=spectre
+ahdl_include "mult_detector.va"
+ahdl_include "lns_detector.va"
+
+VA  (A   0) vsource dc=25
+VB  (B   0) vsource dc=30
+VC  (C   0) vsource dc=12
+VD  (D   0) vsource dc=40
+VT  (Vth 0) vsource type=pwl wave=[0 0 2m 2000]
+
+XM (A B C D Vth  p1 p2 sM  outM) mult_detector
+XL (A B C D Vth  lA lB lC lD  x y sL  outL) lns_detector exact=0 kbits=2
+
+tranAn tran stop=2m maxstep=2u
+save Vth outM outL sM sL x y p1 p2
