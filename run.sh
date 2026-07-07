@@ -37,16 +37,18 @@ vvp verif/tb_sweep.vvp
 echo "== Phase 4c: RTL subtraction sweep (A*B-C*D > Vth, several sets) =="
 python3 - <<'PY'
 import csv, sys; sys.path.insert(0,'model'); import model as m
-sets=[(25,30,12,40),(8,8,5,5),(50,50,20,20),(3,3,3,3),(40,40,10,10),(30,30,10,10)]
+sets=[(25,30,12,40,300),(8,8,5,5,150),(50,50,20,20,2000),
+      (3,3,3,3,17),(40,40,10,10,1500),(30,30,10,10,800)]   # A,B,C,D,operating Vth
 rows=[]
-for sid,(A,B,C,D) in enumerate(sets):
-    S=A*B-C*D; Vhi=max(80,2*S+80)
-    lf=next((v for v in range(0,Vhi+1) if m.sub_k2(A,B,C,D,v)==0),0)
-    lo=max(0,min(S,lf)-30); hi=max(S,lf)+30; Vmax=max(Vhi,hi+40)
-    vals=set(); step=max(1,Vmax//200); v=0
+for sid,(A,B,C,D,Vop) in enumerate(sets):
+    S=A*B-C*D; Vmax=2*Vop                                  # x-axis = 0 .. 2*Vth
+    lf=next((v for v in range(0,Vmax+1) if m.sub_k2(A,B,C,D,v)==0),0)
+    vals=set([0,Vmax,Vop]); step=max(1,Vmax//240); v=0
     while v<=Vmax: vals.add(v); v+=step
-    for v in range(lo,hi+1): vals.add(v)
-    for v in sorted(vals): rows.append((sid,A,B,C,D,v))
+    for cen in (S,lf,Vop):
+        for v in range(max(0,cen-25),min(Vmax,cen+25)+1): vals.add(v)
+    for v in sorted(vals):
+        if 0<=v<=Vmax: rows.append((sid,A,B,C,D,v))
 with open('verif/sweep_sub_vec.csv','w',newline='') as f:
     w=csv.writer(f); w.writerow(['sid','A','B','C','D','Vth']); w.writerows(rows)
 PY

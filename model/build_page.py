@@ -698,10 +698,8 @@ def _sub_mini(rows):
     Sv = A * B - C * D
     mf = next((v for v, mm, ll, *_ in rows if mm == 0), None)
     lf = next((v for v, mm, ll, *_ in rows if ll == 0), None)
-    fl = [f for f in (mf, lf) if f is not None] or [0]
-    fmin, fmax = min(fl), max(fl)
-    span = max(fmax - fmin, max(1, int(fmax * 0.12)), 12)
-    xlo = max(0, fmin - int(span * 0.5)); xhi = fmax + int(span * 0.6)
+    xlo = 0; xhi = max(v for v, *_ in rows)           # x-axis = 0 .. 2·Vth
+    vop = xhi // 2                                     # operating threshold (Vmax/2)
     if xhi <= xlo: xhi = xlo + 20
     W, H = 384, 176; ox, oy = 18, 42; pw, ph = W - ox - 8, H - oy - 26
     def X(v): return ox + pw * (min(max(v, xlo), xhi) - xlo) / (xhi - xlo)
@@ -727,7 +725,13 @@ def _sub_mini(rows):
                  % (ox - 3, yy + 3, val))
     P.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
              % (ox, oy + ph, ox + pw, oy + ph))
-    for tv in sorted(set(f for f in (mf, lf) if f is not None)):
+    # operating threshold marker (x-axis spans 0 .. 2·Vth, so Vth sits at mid)
+    vx = X(vop)
+    P.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--ink2)" stroke-width="1" '
+             'stroke-dasharray="3 2" opacity="0.55"/>' % (vx, oy - 2, vx, oy + ph))
+    P.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9" fill="var(--ink2)">'
+             'Vth=%d</text>' % (vx, oy - 5, vop))
+    for tv in (xlo, xhi):                             # only 0 and 2·Vth (evenly spaced, no collision)
         xx = X(tv)
         P.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
                  % (xx, oy + ph, xx, oy + ph + 4))
@@ -739,8 +743,6 @@ def _sub_mini(rows):
         for r in vis[1:]:
             pth += " H %.1f V %.1f" % (X(r[0]), YL(r[idx], off))
         P.append('<path d="%s" fill="none" stroke="%s" stroke-width="2"/>' % (pth, col))
-    P.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9.5" fill="var(--muted)">'
-             'Vth</text>' % (ox + pw / 2, H - 3))
     P.append('</svg>')
     return "".join(P)
 
@@ -750,6 +752,27 @@ def sweep_sub_plots():
     cards = "".join('<div class="subcard">%s</div>' % _sub_mini(SWEEP_SUB[s])
                     for s in sorted(SWEEP_SUB))
     return '<div class="subgrid">%s</div>' % cards
+
+# ---- Accuracy vs helper bits K:  error of the K-bit log value, % of full-scale ----
+def k_error_table():
+    body = []
+    for K in range(0, 5):
+        SC = 1 << K
+        errs = []
+        for v in range(1, 1 << WIDTH):
+            e = v.bit_length() - 1
+            t = 0
+            for i in range(1, K + 1):
+                pos = e - i
+                t = (t << 1) | (((v >> pos) & 1) if pos >= 0 else 0)
+            vhat = 2.0 ** ((SC * e + t) / float(SC))          # reconstructed value
+            errs.append(abs(vhat - v) / v)                    # relative error
+        mx = max(errs) * 100.0
+        mean = sum(errs) / len(errs) * 100.0
+        lit = ' class="lit"' if K == MODEL.K else ''
+        body.append('<tr%s><td>%d</td><td>%d</td><td>%.4g</td><td>%.1f%%</td><td>%.1f%%</td></tr>'
+                    % (lit, K, SC, 1.0 / SC, mx, mean))
+    return "".join(body)
 
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
@@ -866,6 +889,25 @@ PAGE = f"""<div class="wrap">
   A·B−C·D = 0, so both read 0 for any V<sub>th</sub> ≥ 0 (they agree trivially). The log design can err
   in either direction — <b>40,40,10,10</b> flips a touch late (over-estimate), <b>30,30,10,10</b>
   flips early (under-estimate).</p>
+</section>
+
+<section>
+  <h2>Accuracy vs helper bits K &nbsp;<span class="fn">error as % of full-scale V<sub>th</sub></span></h2>
+  <p class="note">The single accuracy knob is <b>K</b>, the number of mantissa (helper) bits each log
+  converter keeps. With K fraction bits a log value is resolved to 2<sup>−K</sup>, so a product or
+  threshold is pinned to within a ratio of 2<sup>2<sup>−K</sup></sup> — i.e. the <b>worst-case
+  decision error as a fraction of full-scale V<sub>th</sub></b>. Both error columns below are computed
+  directly from the K-bit converter over the {WIDTH}-bit input range. This build ships <b>K = {K}</b>.</p>
+  <div class="tablescroll" style="display:inline-block;max-width:100%">
+    <table class="ftab"><thead><tr>
+      <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th><th>log resolution 2<sup>−K</sup></th>
+      <th>worst-case error<br>(% of full scale)</th><th>mean error</th></tr></thead>
+    <tbody>{k_error_table()}</tbody></table>
+  </div>
+  <p class="note">Each helper bit roughly cuts the error by a third (≈ ÷√2 per bit in ratio terms)
+  but adds one bit to every log bus and ROM address, so area/power climb with K. <b>K = 0</b> is
+  exponent-only — a factor-of-2 (one-octave) grid; <b>K = {K}</b> holds the worst case near 20% while
+  keeping the F-ROM at just 6 gates. The row for this build is highlighted.</p>
 </section>
 
 <section class="kpis">
@@ -1096,6 +1138,7 @@ h3.sub3{font-size:14px;margin:22px 0 8px;color:var(--ink)}
 .ftab{border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .ftab th,.ftab td{border:1px solid var(--grid);padding:5px 12px;text-align:right}
 .ftab th{color:var(--ink2);font-weight:600;background:var(--surface)}
+.ftab tr.lit td{background:rgba(42,120,214,.10);font-weight:600;color:var(--ink)}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border:0}
 .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px 16px 14px}
 .kv{font-size:30px;font-weight:700;letter-spacing:-.01em;color:var(--accent)}
