@@ -678,6 +678,79 @@ def sweep_plot_svg():
     S.append('</svg>')
     return "".join(S)
 
+# ---- SUBTRACTION sweep (A*B - C*D > Vth): small multiples over several operand sets ----
+def _read_sweep_sub():
+    from collections import defaultdict
+    by = defaultdict(list)
+    try:
+        for r in csv.DictReader(open(os.path.join(ROOT, "verif", "sweep_sub_rtl.csv"))):
+            by[int(r["sid"])].append((int(r["Vth"]), int(r["out_mult"]), int(r["out_log"]),
+                                      int(r["A"]), int(r["B"]), int(r["C"]), int(r["D"])))
+        for k in by:
+            by[k].sort()
+    except Exception:
+        return {}
+    return by
+SWEEP_SUB = _read_sweep_sub()
+
+def _sub_mini(rows):
+    A, B, C, D = rows[0][3], rows[0][4], rows[0][5], rows[0][6]
+    Sv = A * B - C * D
+    mf = next((v for v, mm, ll, *_ in rows if mm == 0), None)
+    lf = next((v for v, mm, ll, *_ in rows if ll == 0), None)
+    fl = [f for f in (mf, lf) if f is not None] or [0]
+    fmin, fmax = min(fl), max(fl)
+    span = max(fmax - fmin, max(1, int(fmax * 0.12)), 12)
+    xlo = max(0, fmin - int(span * 0.5)); xhi = fmax + int(span * 0.6)
+    if xhi <= xlo: xhi = xlo + 20
+    W, H = 384, 176; ox, oy = 18, 42; pw, ph = W - ox - 8, H - oy - 26
+    def X(v): return ox + pw * (min(max(v, xlo), xhi) - xlo) / (xhi - xlo)
+    yhi, ylo = oy + ph * 0.22, oy + ph * 0.80
+    def YL(val, off): return (yhi if val else ylo) - off
+    ACC, AQ = "var(--accent)", "#199e70"
+    P = ['<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg" '
+         'font-family="system-ui,-apple-system,Segoe UI,sans-serif">' % (W, H)]
+    P.append('<text x="8" y="14" font-size="11.5" font-weight="600" fill="var(--ink)">%d,%d,%d,%d</text>'
+             % (A, B, C, D))
+    P.append('<text x="%d" y="14" text-anchor="end" font-size="10.5" fill="var(--ink2)">'
+             'A·B−C·D = %d</text>' % (W - 8, Sv))
+    dis = [v for v, mm, ll, *_ in rows if mm != ll and xlo <= v <= xhi]
+    if dis:
+        bx0, bx1 = X(min(dis)), X(max(dis))
+        P.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="rgba(208,59,59,0.14)"/>'
+                 % (bx0, oy, max(2, bx1 - bx0), ph))
+    for val in (1, 0):
+        yy = YL(val, 0)
+        P.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--grid)" stroke-width="1" '
+                 'stroke-dasharray="2 3"/>' % (ox, yy, ox + pw, yy))
+        P.append('<text x="%.1f" y="%.1f" text-anchor="end" font-size="9" fill="var(--muted)">%d</text>'
+                 % (ox - 3, yy + 3, val))
+    P.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
+             % (ox, oy + ph, ox + pw, oy + ph))
+    for tv in sorted(set(f for f in (mf, lf) if f is not None)):
+        xx = X(tv)
+        P.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--axis)" stroke-width="1"/>'
+                 % (xx, oy + ph, xx, oy + ph + 4))
+        P.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9" fill="var(--muted)">%d</text>'
+                 % (xx, oy + ph + 14, tv))
+    for idx, col, off in ((1, ACC, 0), (2, AQ, 6)):
+        vis = [r for r in rows if xlo <= r[0] <= xhi] or rows
+        pth = "M %.1f %.1f" % (X(vis[0][0]), YL(vis[0][idx], off))
+        for r in vis[1:]:
+            pth += " H %.1f V %.1f" % (X(r[0]), YL(r[idx], off))
+        P.append('<path d="%s" fill="none" stroke="%s" stroke-width="2"/>' % (pth, col))
+    P.append('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="9.5" fill="var(--muted)">'
+             'Vth</text>' % (ox + pw / 2, H - 3))
+    P.append('</svg>')
+    return "".join(P)
+
+def sweep_sub_plots():
+    if not SWEEP_SUB:
+        return "<p class='note'>(run <code>verif/tb_sweep_sub</code>)</p>"
+    cards = "".join('<div class="subcard">%s</div>' % _sub_mini(SWEEP_SUB[s])
+                    for s in sorted(SWEEP_SUB))
+    return '<div class="subgrid">%s</div>' % cards
+
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
 <header>
@@ -774,6 +847,25 @@ PAGE = f"""<div class="wrap">
   <b>1024 ≤ V<sub>th</sub> &lt; 1230</b> the two <em>disagree</em> (log says 0, exact says 1): that
   is the K=2 approximation cost for this input, made concrete by simulation. Elsewhere they
   agree. Everything else (area, power, ports) is unchanged — only the decision boundary moves.</p>
+</section>
+
+<section>
+  <h2>RTL sweep — the subtraction kernel &nbsp;<span class="fn">A·B − C·D &gt; V<sub>th</sub>, six operand sets</span></h2>
+  <p class="note">Same idea for the <b>subtraction</b> kernel, from RTL simulation
+  (<code>verif/tb_sweep_sub.v</code> drives <code>mult_sub.v</code> and <code>log_sub.v</code>; the
+  log design uses the rearrangement <code>A·B &gt; C·D + Vth</code>, and both are verified bit-exact
+  to the golden model). Each panel sweeps V<sub>th</sub> and overlays the two 1-bit outputs — the
+  classic flips exactly at V<sub>th</sub> = A·B−C·D, the log/LNS at its approximation; the shaded band
+  is where they disagree.</p>
+  <div class="leg2"><span><i style="background:var(--accent)"></i>classic (multiplier)</span>
+    <span><i style="background:#199e70"></i>log / LNS (K=2)</span>
+    <span><i class="band"></i>disagree</span></div>
+  {sweep_sub_plots()}
+  <p class="note"><b>Cancellation</b> sets the accuracy: <b>25,30,12,40</b> (A·B and C·D both large, the
+  difference small) has a wide band, whereas <b>8,8,5,5</b> is near-exact. <b>3,3,3,3</b> gives
+  A·B−C·D = 0, so both read 0 for any V<sub>th</sub> ≥ 0 (they agree trivially). The log design can err
+  in either direction — <b>40,40,10,10</b> flips a touch late (over-estimate), <b>30,30,10,10</b>
+  flips early (under-estimate).</p>
 </section>
 
 <section class="kpis">
@@ -989,6 +1081,15 @@ h3.sub3{font-size:14px;margin:22px 0 8px;color:var(--ink)}
 .fn{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82em;font-weight:400;color:var(--ink2)}
 .plotcard,.schem{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px;margin:0}
 .plotcard svg,.schem svg{display:block;width:100%;height:auto}
+.subgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.subcard{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:8px}
+.subcard svg{display:block;width:100%;height:auto}
+.leg2{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;font-size:13px;color:var(--ink2)}
+.leg2 span{display:inline-flex;align-items:center;gap:7px}
+.leg2 i{width:14px;height:4px;border-radius:2px;display:inline-block}
+.leg2 i.band{width:12px;height:12px;border-radius:3px;background:rgba(208,59,59,0.28)}
+@media(max-width:820px){.subgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.subgrid{grid-template-columns:1fr}}
 .schem figcaption.lutio{font-size:12px;color:var(--ink2);text-align:center;padding-bottom:9px;margin-bottom:6px;border-bottom:1px solid var(--grid)}
 .schem figcaption.lutio b{color:var(--ink)}
 .prog{color:var(--good);border:1px solid var(--good);border-radius:20px;padding:0 7px;font-size:10.5px;font-weight:600}

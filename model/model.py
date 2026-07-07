@@ -95,6 +95,29 @@ def out_k1(A, B, C, D, Vth):
     return 1 if s > lv else 0              # compare in log domain
 
 # ---------------------------------------------------------------------------
+# SUBTRACTION kernel:  out = (A*B - C*D) > Vth.  Golden specs for mult_sub / log_sub.
+# The log form rearranges to  A*B > C*D + Vth  (Vth >= 0), reusing the F(d) ROM.
+# ---------------------------------------------------------------------------
+def sub_exact(A, B, C, D, Vth):
+    return 1 if (A * B - C * D) > Vth else 0
+
+def sub_k2(A, B, C, D, Vth):               # bit-exact spec of rtl/log_sub.v
+    zA, la = log_k1(A); zB, lb = log_k1(B)
+    zC, lc = log_k1(C); zD, ld = log_k1(D)
+    zx = zA or zB                          # A*B == 0
+    zy = zC or zD                          # C*D == 0
+    X = la + lb                            # log2(A*B)
+    Y = lc + ld                            # log2(C*D)
+    zv, lv = log_k1(Vth)
+    if zy and zv:  w_zero, w = 1, 0        # w = log2(C*D + Vth) via LNS add
+    elif zy:       w_zero, w = 0, lv
+    elif zv:       w_zero, w = 0, Y
+    else:          w_zero, w = 0, max(Y, lv) + FTAB[abs(Y - lv)]
+    if zx:      return 0
+    if w_zero:  return 1
+    return 1 if X > w else 0
+
+# ---------------------------------------------------------------------------
 # Emit rtl/lns_ftable.v from FTAB (single source of truth).
 # ---------------------------------------------------------------------------
 def emit_ftable_v():

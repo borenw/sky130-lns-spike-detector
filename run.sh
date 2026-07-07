@@ -34,6 +34,26 @@ iverilog -g2012 -o verif/tb_sweep.vvp verif/tb_sweep.v \
     rtl/mult_detector.v rtl/log_detector.v rtl/lod5.v rtl/lns_add.v rtl/lns_ftable.v
 vvp verif/tb_sweep.vvp
 
+echo "== Phase 4c: RTL subtraction sweep (A*B-C*D > Vth, several sets) =="
+python3 - <<'PY'
+import csv, sys; sys.path.insert(0,'model'); import model as m
+sets=[(25,30,12,40),(8,8,5,5),(50,50,20,20),(3,3,3,3),(40,40,10,10),(30,30,10,10)]
+rows=[]
+for sid,(A,B,C,D) in enumerate(sets):
+    S=A*B-C*D; Vhi=max(80,2*S+80)
+    lf=next((v for v in range(0,Vhi+1) if m.sub_k2(A,B,C,D,v)==0),0)
+    lo=max(0,min(S,lf)-30); hi=max(S,lf)+30; Vmax=max(Vhi,hi+40)
+    vals=set(); step=max(1,Vmax//200); v=0
+    while v<=Vmax: vals.add(v); v+=step
+    for v in range(lo,hi+1): vals.add(v)
+    for v in sorted(vals): rows.append((sid,A,B,C,D,v))
+with open('verif/sweep_sub_vec.csv','w',newline='') as f:
+    w=csv.writer(f); w.writerow(['sid','A','B','C','D','Vth']); w.writerows(rows)
+PY
+iverilog -g2012 -o verif/tb_sweep_sub.vvp verif/tb_sweep_sub.v \
+    rtl/mult_sub.v rtl/log_sub.v rtl/lod5.v rtl/lns_add.v rtl/lns_ftable.v
+vvp verif/tb_sweep_sub.vvp
+
 echo "== Phase 5: synthesis =="
 yosys -s synth/run_mult.ys > synth/d1_synth.log 2>&1
 yosys -s synth/run_log.ys  > synth/d2_synth.log 2>&1
