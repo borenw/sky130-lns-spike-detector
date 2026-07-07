@@ -1,0 +1,4 @@
+*.ahdlSimDB/
+spectre_run/swpVth.dc
+spectre_run/spectre.out
+spectre_run/logFile
