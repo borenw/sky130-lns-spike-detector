@@ -1,0 +1,8 @@
+read_verilog -sv rtl/mult_cd.v
+hierarchy -top mult_cd
+synth -top mult_cd -flatten
+abc -liberty /usr/local/packages/tsmc_18m/ip/digital/Front_End/timing_power_noise/NLDM/tcb018gbwp7t_270a/tcb018gbwp7ttc.lib
+opt_clean -purge
+clean -purge
+stat -liberty /usr/local/packages/tsmc_18m/ip/digital/Front_End/timing_power_noise/NLDM/tcb018gbwp7t_270a/tcb018gbwp7ttc.lib
+write_verilog -noattr -nodec synth/mult_cd_tcb018.v

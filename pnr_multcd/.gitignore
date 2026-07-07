@@ -1,0 +1,11 @@
+*.enc
+*.enc.dat/
+work/
+*.log
+*.logv
+*.out
+cds.lib
+.cadence/
+vthp_pnr/
+*.gds
+*.rpt.gz
