@@ -51,16 +51,16 @@ module lns_detector (A, B, C, D, Vth, lA, lB, lC, lD, x, y, s, out);
     analog function real klog2;
         input v, ex, k;
         real v; integer ex, k;
-        real e, m, scl;
+        real e, m, scl, vv;
         begin
-            if (v < 1.0e-30) v = 1.0e-30;
+            vv = (v < 1.0e-30) ? 1.0e-30 : v;                 // local guard (can't write input v)
             if (ex != 0) begin
-                klog2 = ln(v) / ln(2.0);
+                klog2 = ln(vv) / ln(2.0);
             end else begin
-                e     = floor(ln(v) / ln(2.0));
-                m     = v / pow(2.0, e) - 1.0;                 // mantissa in [0,1)
+                e     = floor(ln(vv) / ln(2.0));
+                m     = vv / pow(2.0, e) - 1.0;                // mantissa in [0,1)
                 scl   = pow(2.0, k);
-                klog2 = e + floor(m * scl) / scl;              // Mitchell: log2(1+m) ~ frac
+                klog2 = e + floor(m * scl) / scl;             // Mitchell: log2(1+m) ~ frac
             end
         end
     endfunction
@@ -76,11 +76,17 @@ module lns_detector (A, B, C, D, Vth, lA, lB, lC, lD, x, y, s, out);
         xx = la + lb;                                // log2(A*B)  = log2(A)+log2(B)
         yy = lc + ld;                                // log2(C*D)  = log2(C)+log2(D)
 
-        // LNS add:  s = max(x,y) + log2(1 + 2^-|x-y|)  = log2(A*B + C*D)
+        // LNS add:  s = max(x,y) + F(|x-y|),  F(d) = log2(1 + 2^-d)  = log2(A*B + C*D)
+        // exact=1 : continuous F (ideal).   exact=0 : F rounded to 1/2^K, exactly like
+        // the RTL's F-ROM (rtl/lns_ftable.v) -- makes this model track log_detector.v.
         dd = xx - yy;
         if (dd < 0.0) dd = -dd;
         hi = (xx > yy) ? xx : yy;
-        ss = hi + ln(1.0 + pow(2.0, -dd)) / ln(2.0);
+        if (exact != 0)
+            ss = hi + ln(1.0 + pow(2.0, -dd)) / ln(2.0);
+        else
+            ss = hi + floor(pow(2.0, kbits) * ln(1.0 + pow(2.0, -dd)) / ln(2.0) + 0.5)
+                      / pow(2.0, kbits);
 
         // ---- expose the internal log-domain nets ----
         V(lA) <+ la;

@@ -41,9 +41,9 @@ out = ( A*B + C*D ) > Vth          computed in the log2 domain
 | `vmin` | `1e-12` | floor keeping `log` finite as an operand → 0 |
 
 Set `exact=0 kbits=2` to reproduce the synthesized hardware’s approximation; leave
-`exact=1` for the mathematical reference. (In K-bit mode the per-operand log
-converters are quantized exactly as in RTL; the `F(|x-y|)` correction is evaluated
-in closed form rather than from the rounded ROM — the only difference vs. gate-level.)
+`exact=1` for the mathematical reference. In K-bit mode the per-operand log converters
+**and** the `F(|x-y|)` correction are quantized to `1/2^K` exactly like `rtl/log_detector.v`
++ its F-ROM, so the model tracks the gate-level design bit-for-bit (verified below).
 
 ## Use it
 
@@ -102,6 +102,17 @@ approximation (~1024) — the same disagreement the RTL sweep shows on the page.
 
 ---
 
-> Behavioral models, not verified on this repo’s host (no Spectre here); they target
-> Cadence Spectre / Virtuoso. Standard Verilog-AMS (`constants.vams`,
-> `disciplines.vams`).
+## Verified in Spectre
+
+Both models were run on host **tau** with **Cadence Spectre 20.1** (`tb_compare.scs`,
+`0 errors`). The DC-`Vth` sweep at A,B,C,D = 25,30,12,40 gives:
+
+| output | flips at Vth | |
+|--|--|--|
+| `outM` exact multiplier | **1230** | `= A*B+C*D` |
+| `outL` log/LNS (K=2) | **1024** | `= 2^sL` |
+
+→ disagreement band **Vth ∈ [1024, 1228]** — **identical** to the Icarus RTL sweep on the
+page (log_detector flips at 1024, mult_detector at 1230). Full numbers + the extracted
+`compare.csv` are in [`spectre_run/RESULTS.md`](spectre_run/RESULTS.md).
+
