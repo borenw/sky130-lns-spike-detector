@@ -795,6 +795,28 @@ def k_error_table():
                     % (lit, K, SC, mx, mean, dis_cell, area_cell))
     return "".join(body)
 
+# ---- Cadence std-cell flow: copy-paste-ready commands ----
+CAD_FLOW = html.escape("""# env (host tau)
+export PATH=/usr/local/packages/cadence_2021/INNOVUS201/bin:/usr/local/packages/cadence_2021/IC618/tools.lnx86/dfII/bin:$PATH
+export CDS_LIC_FILE=/usr/local/packages/cadence_2021/license.dat
+
+# 1. RTL -> tcb018 standard cells (yosys)      -> synth/vth_prime_tcb018.v  (179 cells)
+yosys -s synth/run_vthp.ys
+
+# 2. netlist -> Virtuoso schematic in myLib (Verilog-In)
+(cd ihdl_run && ihdl -param param.txt -cdslib ./cds.lib vth_prime_tcb018.v)
+
+# 3. place & route -> DRC-clean GDS (Innovus; script below)
+(cd pnr_vthp && innovus -no_gui -files run_vthp_pnr.tcl)
+
+# 4. import the routed layout into Virtuoso
+strmin -library myLib -strmFile pnr_vthp/vth_prime.gds \\
+       -layerMap /usr/local/packages/tsmc_18m/pdk/tsmc18/tsmc18.layermap -view layout""")
+try:
+    CAD_PNR = html.escape(open(os.path.join(ROOT, "pnr_vthp", "run_vthp_pnr.tcl")).read().strip())
+except Exception:
+    CAD_PNR = "(pnr_vthp/run_vthp_pnr.tcl)"
+
 # ---------------------------------------------------------------------------
 PAGE = f"""<div class="wrap">
 <header>
@@ -1113,6 +1135,37 @@ PAGE = f"""<div class="wrap">
   the three output bits <code>f[0..2]</code>; <code>f[3]</code> is tied low.</p>
 </section>
 
+<section id="cadence">
+  <h2>Cadence std-cell implementation &nbsp;<span class="fn">the Vth′ block in real silicon (TSMC 0.18 µm)</span></h2>
+  <p class="note">The Vth′(C,D) block above, carried all the way to layout: RTL → <b>yosys</b> to
+  <b>tcb018</b> standard cells → <b>Verilog-In (<code>ihdl</code>)</b> schematic in Virtuoso
+  <code>myLib</code> → <b>Innovus</b> place-and-route (<b>0 DRC violations</b>). Alongside it, the
+  plain 10×10 <code>C·D</code> multiplier it replaces — drawn to the same scale:</p>
+  <figure class="schem"><img src="vthp_layout_compare.png" alt="vth_prime vs mult_cd layout, to scale"
+    style="display:block;width:100%;height:auto;border-radius:8px"/>
+    <figcaption class="lutio" style="border:0;padding-top:8px;margin:0">Innovus P&amp;R placement,
+    to scale — log-domain Vth′ block (80×75 µm) vs. the 10×10 multiplier (113×110 µm).</figcaption></figure>
+  <div class="tablescroll" style="display:inline-block;max-width:100%;margin-top:12px">
+    <table class="ftab"><thead><tr><th>metric (tcb018, Innovus)</th>
+      <th>Vth′ block <span class="fn">log</span></th><th>C·D multiplier</th></tr></thead>
+    <tbody>
+      <tr><td>standard cells</td><td>179</td><td>343</td></tr>
+      <tr><td>std-cell area</td><td>4215 µm²</td><td>9824 µm²</td></tr>
+      <tr><td>die (x × y)</td><td>80 × 75 µm</td><td>113 × 110 µm</td></tr>
+      <tr class="lit"><td>die area</td><td>~5.97k µm²</td><td>~12.4k µm² &nbsp;(≈2×)</td></tr>
+      <tr><td>DRC</td><td>clean</td><td>clean</td></tr>
+    </tbody></table>
+  </div>
+  <h3 class="sub3">Reproduce &nbsp;<span class="fn">RTL → GDS, copy-paste</span></h3>
+  <div class="cblock"><button class="copybtn" onclick="copyCode(this)">Copy</button><pre>{CAD_FLOW}</pre></div>
+  <h3 class="sub3">Innovus P&amp;R script &nbsp;<span class="fn">pnr_vthp/run_vthp_pnr.tcl</span></h3>
+  <div class="cblock"><button class="copybtn" onclick="copyCode(this)">Copy</button><pre>{CAD_PNR}</pre></div>
+  <p class="note">Batch, no GUI. Swap <code>vth_prime</code>→<code>mult_cd</code> (and the pin lists)
+  for the multiplier. Schematic import uses <code>ihdl</code> (Verilog-In); the P&amp;R reads the
+  tcb018 LEF + NLDM <code>.lib</code>, does floorplan → place → route → fillers, verifies DRC, and
+  streams out a merged GDS.</p>
+</section>
+
 <section id="files">
   <h2>Files</h2>
   <p class="filehdr note"><a href="{REPO}">Browse the repository ↗</a>
@@ -1129,6 +1182,9 @@ PAGE = f"""<div class="wrap">
   OpenROAD/OpenLane P&amp;R + OpenSTA; the comparison <em>ratios</em> reported here are the
   robust figures.</p>
 </footer>
+<script>
+function copyCode(b){{var p=b.parentNode.querySelector('pre');navigator.clipboard.writeText(p.innerText).then(function(){{var t=b.textContent;b.textContent='Copied!';setTimeout(function(){{b.textContent=t}},1200);}});}}
+</script>
 </div>"""
 
 STYLE = """
@@ -1194,6 +1250,10 @@ h3.sub3{font-size:14px;margin:22px 0 8px;color:var(--ink)}
 .ftab th,.ftab td{border:1px solid var(--grid);padding:5px 12px;text-align:right}
 .ftab th{color:var(--ink2);font-weight:600;background:var(--surface)}
 .ftab tr.lit td{background:rgba(42,120,214,.10);font-weight:600;color:var(--ink)}
+.cblock{position:relative;margin:10px 0}
+.cblock pre{background:#0d0d12;color:#dfe3e8;border:1px solid var(--ring);border-radius:9px;padding:14px 16px;margin:0;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.55}
+.copybtn{position:absolute;top:8px;right:8px;font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:#20242c;color:#c9cdd4;cursor:pointer}
+.copybtn:hover{border-color:var(--accent);color:#fff}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border:0}
 .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px 16px 14px}
 .kv{font-size:30px;font-weight:700;letter-spacing:-.01em;color:var(--accent)}
