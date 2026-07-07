@@ -1,0 +1,99 @@
+// lns_detector.va -- Cadence Spectre (Verilog-A) behavioral model of the
+// multiplier-free log / LNS MAC detector:
+//
+//     out = ( A*B + C*D ) > Vth        computed entirely in the log2 domain
+//
+//   lA=log2(A)  lB=log2(B)  lC=log2(C)  lD=log2(D)     (K-bit Mitchell converters)
+//   x = lA + lB = log2(A*B)            y = lC + lD = log2(C*D)
+//   s = max(x,y) + log2(1 + 2^-|x-y|) = log2(A*B + C*D)          (the "LNS add")
+//   out = ( s > log2(Vth) )            <=>   ( A*B + C*D > Vth )
+//
+// The operands A,B,C,D and the threshold Vth are analog INPUT voltages that
+// carry the numeric values (drive V(A)=25.0 for A=25, etc.).  Every internal
+// log-domain net -- lA, lB, lC, lD, x, y, s -- is brought out as an analog
+// OUTPUT voltage so it can be probed / plotted in Spectre.
+//
+// Parameters
+//   exact = 1 : ideal continuous log2 (mathematical reference)   <-- default
+//   exact = 0 : K-bit Mitchell converter matching rtl/log_detector.v
+//               (floor(log2) + K truncated mantissa bits); set kbits = K.
+//   kbits     : mantissa (helper) bits used when exact = 0  (this build: 2)
+//   voh/vol   : logic output levels (V).   tr : output transition time (s).
+//
+// NOTE: this is a *behavioral* model.  In K-bit mode the per-operand log
+// converters are quantized exactly like the RTL, but the F(|x-y|) add-correction
+// is evaluated in closed form (the RTL rounds it into a small ROM); that ROM
+// rounding is the only extra approximation not reproduced here.
+
+`include "constants.vams"
+`include "disciplines.vams"
+
+module lns_detector (A, B, C, D, Vth, lA, lB, lC, lD, x, y, s, out);
+
+    // ---- ports ----
+    input  A, B, C, D, Vth;                    // operands + threshold (numeric values, in volts)
+    output lA, lB, lC, lD, x, y, s, out;       // exposed log nets + comparator output
+    electrical A, B, C, D, Vth, lA, lB, lC, lD, x, y, s, out;
+
+    // ---- parameters ----
+    parameter integer exact = 1    from [0:1];        // 1: true log2 ; 0: K-bit Mitchell (hardware)
+    parameter integer kbits = 2    from [0:16];       // mantissa bits when exact=0 (this build K=2)
+    parameter real    voh   = 1.0;                    // logic-1 output level (V)
+    parameter real    vol   = 0.0;                    // logic-0 output level (V)
+    parameter real    tr    = 1.0e-9 from (0:inf);    // output transition time (s)
+    parameter real    vmin  = 1.0e-12 from (0:inf);   // floor so log stays finite as operand -> 0
+
+    real la, lb, lc, ld, lv, xx, yy, dd, hi, ss, outv;
+
+    // K-bit Mitchell log2 converter.
+    //   exact != 0 : continuous log2 = ln(v)/ln(2)
+    //   exact == 0 : e = floor(log2 v); frac = truncate(mantissa, k bits); return e + frac
+    analog function real klog2;
+        input v, ex, k;
+        real v; integer ex, k;
+        real e, m, scl;
+        begin
+            if (v < 1.0e-30) v = 1.0e-30;
+            if (ex != 0) begin
+                klog2 = ln(v) / ln(2.0);
+            end else begin
+                e     = floor(ln(v) / ln(2.0));
+                m     = v / pow(2.0, e) - 1.0;                 // mantissa in [0,1)
+                scl   = pow(2.0, k);
+                klog2 = e + floor(m * scl) / scl;              // Mitchell: log2(1+m) ~ frac
+            end
+        end
+    endfunction
+
+    analog begin
+        // per-operand K-bit log converters (guarded against v <= 0)
+        la = klog2( (V(A)   > vmin) ? V(A)   : vmin, exact, kbits );
+        lb = klog2( (V(B)   > vmin) ? V(B)   : vmin, exact, kbits );
+        lc = klog2( (V(C)   > vmin) ? V(C)   : vmin, exact, kbits );
+        ld = klog2( (V(D)   > vmin) ? V(D)   : vmin, exact, kbits );
+        lv = klog2( (V(Vth) > vmin) ? V(Vth) : vmin, exact, kbits );
+
+        xx = la + lb;                                // log2(A*B)  = log2(A)+log2(B)
+        yy = lc + ld;                                // log2(C*D)  = log2(C)+log2(D)
+
+        // LNS add:  s = max(x,y) + log2(1 + 2^-|x-y|)  = log2(A*B + C*D)
+        dd = xx - yy;
+        if (dd < 0.0) dd = -dd;
+        hi = (xx > yy) ? xx : yy;
+        ss = hi + ln(1.0 + pow(2.0, -dd)) / ln(2.0);
+
+        // ---- expose the internal log-domain nets ----
+        V(lA) <+ la;
+        V(lB) <+ lb;
+        V(lC) <+ lc;
+        V(lD) <+ ld;
+        V(x)  <+ xx;
+        V(y)  <+ yy;
+        V(s)  <+ ss;
+
+        // ---- comparator:  out = ( s > log2(Vth) ) ----
+        outv = (ss > lv) ? voh : vol;
+        V(out) <+ transition(outv, 0.0, tr);
+    end
+
+endmodule

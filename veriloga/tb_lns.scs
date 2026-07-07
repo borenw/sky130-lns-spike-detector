@@ -1,0 +1,30 @@
+// tb_lns.scs -- Spectre testbench for lns_detector.va
+//
+// Drives the worked-example operands A,B,C,D = 25,30,12,40 (so A*B+C*D = 1230)
+// and sweeps the threshold Vth.  The exposed log nets are constant (operands
+// fixed) so you can read them directly; `out` flips when Vth crosses 1230.
+//
+//   run:   spectre tb_lns.scs
+//   then plot  x y s lA lB lC lD out  vs the Vth sweep.
+
+simulator lang=spectre
+ahdl_include "lns_detector.va"
+
+// operands + threshold as DC voltage sources (numeric value == volts)
+VA  (A   0) vsource dc=25
+VB  (B   0) vsource dc=30
+VC  (C   0) vsource dc=12
+VD  (D   0) vsource dc=40
+VT  (Vth 0) vsource dc=600
+
+// DUT.  exact=1 -> ideal log2 reference; use exact=0 kbits=2 for the K=2 hardware model.
+X1 (A B C D Vth  lA lB lC lD  x y s  out) lns_detector exact=1 kbits=2
+
+// sweep the threshold 0..2000 ; out (s > log2 Vth) flips at Vth = A*B+C*D = 1230
+swpVth dc dev=VT param=dc start=0 stop=2000 step=2
+
+// expected at the operating point (exact=1):
+//   lA=log2(25)=4.644  lB=log2(30)=4.907  x=log2(750)=9.551
+//   lC=log2(12)=3.585  lD=log2(40)=5.322  y=log2(480)=8.907
+//   s =log2(1230)=10.264 ;  out = 1 while Vth < 1230
+save lA lB lC lD x y s out

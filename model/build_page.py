@@ -826,7 +826,8 @@ PAGE = f"""<div class="wrap">
   <div class="tocg"><span class="tochdr">Top files — log / LNS</span>
     <a href="{REPO_BLOB}/rtl/log_detector.v">RTL ↗</a>
     <a href="{REPO_BLOB}/synth/log_detector_netlist.v">gate-level ↗</a>
-    <a href="{REPO_BLOB}/synth/log_detector.gds">GDS ↗</a></div>
+    <a href="{REPO_BLOB}/synth/log_detector.gds">GDS ↗</a>
+    <a href="{REPO_BLOB}/veriloga/lns_detector.va">Verilog-A ↗</a></div>
   <div class="tocg"><span class="tochdr">multiplier</span>
     <a href="{REPO_BLOB}/rtl/mult_detector.v">RTL ↗</a>
     <a href="{REPO_BLOB}/synth/mult_detector_netlist.v">gate-level ↗</a>
