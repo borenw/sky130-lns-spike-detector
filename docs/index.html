@@ -18,6 +18,12 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;
 .rev{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);text-decoration:none;font-variant-numeric:tabular-nums;border:1px solid var(--ring);border-radius:20px;padding:3px 11px;white-space:nowrap}
 .rev:hover{border-color:var(--accent);color:var(--accent)}
 .revdot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;flex:0 0 auto}
+.toc{display:flex;flex-direction:column;gap:9px;margin:22px 0 6px;padding:13px 16px;background:var(--surface);border:1px solid var(--ring);border-radius:10px}
+.tocg{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.tochdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:118px}
+.toc a{font-size:13px;color:var(--accent);text-decoration:none;white-space:nowrap}
+.toc a:hover{text-decoration:underline}
+section[id]{scroll-margin-top:16px}
 h1{font-size:30px;line-height:1.2;margin:.25em 0 .3em}
 h2{font-size:20px;margin:0 0 .5em;padding-bottom:.35em;border-bottom:1px solid var(--grid)}
 .sub{color:var(--ink2);font-size:16px;max-width:70ch}
@@ -116,7 +122,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   <div class="toprow">
     <div class="eyebrow">SkyWater 130 nm · open-source RTL→GDS flow (yosys)</div>
     <a class="rev" href="https://github.com/borenw/sky130-lns-mac-detector/commits/main" title="revision history — built from this commit">
-      <span class="revdot"></span>rev r21 · c1d0091 · 2026-07-06</a>
+      <span class="revdot"></span>rev r22 · 00bf117 · 2026-07-06</a>
   </div>
   <h1>Eliminating Multipliers with Log / LNS Arithmetic</h1>
   <p class="sub">A general-purpose look at trading hardware multipliers for a small
@@ -131,12 +137,29 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   </div>
 </header>
 
-<section class="bdsec">
+<nav class="toc">
+  <div class="tocg"><span class="tochdr">Jump to</span>
+    <a href="#rtl">RTL structure</a><a href="#datapath">Datapath</a>
+    <a href="#worked">Worked examples</a><a href="#sweep-add">Sweep A·B+C·D</a>
+    <a href="#sweep-sub">Sweep A·B−C·D</a><a href="#accuracy">Accuracy vs K</a>
+    <a href="#comparison">Comparison</a><a href="#die">Die size</a>
+    <a href="#f-rom-lut">Inside the LUT</a><a href="#files">Files</a></div>
+  <div class="tocg"><span class="tochdr">Top files — log / LNS</span>
+    <a href="https://github.com/borenw/sky130-lns-mac-detector/blob/main/rtl/log_detector.v">RTL ↗</a>
+    <a href="https://github.com/borenw/sky130-lns-mac-detector/blob/main/synth/log_detector_netlist.v">gate-level ↗</a>
+    <a href="https://github.com/borenw/sky130-lns-mac-detector/blob/main/synth/log_detector.gds">GDS ↗</a></div>
+  <div class="tocg"><span class="tochdr">multiplier</span>
+    <a href="https://github.com/borenw/sky130-lns-mac-detector/blob/main/rtl/mult_detector.v">RTL ↗</a>
+    <a href="https://github.com/borenw/sky130-lns-mac-detector/blob/main/synth/mult_detector_netlist.v">gate-level ↗</a>
+    <a href="https://github.com/borenw/sky130-lns-mac-detector/blob/main/synth/mult_detector.gds">GDS ↗</a></div>
+</nav>
+
+<section class="bdsec" id="rtl">
   <h2>RTL structure — modules &amp; signals</h2>
   <figure class="bd"><svg viewBox="0 0 690 244" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,Segoe UI,sans-serif"><defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 z" fill="var(--muted)"/></marker></defs><text x="14" y="22" font-size="12.5" font-weight="700" fill="var(--ink2)">① Baseline — one file</text><rect x="14" y="44" width="56" height="34" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="42.0" y="59.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">A,B,C,D</text><text x="42.0" y="70.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">Vth</text><line x1="70" y1="61" x2="120" y2="61" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="95.0" y="57.0" text-anchor="middle" font-size="9" fill="var(--muted)">Ar…Vr</text><rect x="120" y="41" width="178" height="42" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="120" y="41" width="3.5" height="42" rx="1.5" fill="#e34948"/><text x="209.0" y="54.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">mult_detector.v</text><text x="209.0" y="65.5" text-anchor="middle" font-size="9.5" fill="var(--ink2)">p1=Ar*Br  p2=Cr*Dr</text><text x="209.0" y="76.5" text-anchor="middle" font-size="9.5" fill="var(--ink2)">S=p1+p2 · out←(S&gt;Vr)</text><line x1="298" y1="62" x2="336" y2="62" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="317.0" y="58.0" text-anchor="middle" font-size="9" fill="var(--muted)">out</text><rect x="336" y="49" width="54" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="363.0" y="65.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">out</text><text x="14" y="118" font-size="12.5" font-weight="700" fill="var(--ink2)">② Multiplier-free — log_detector.v  ·  lod5.v · lns_add.v · lns_ftable.v</text><rect x="96" y="138" width="500" height="96" rx="9" fill="none" stroke="#57564f" stroke-width="1" stroke-dasharray="4 4"/><text x="104" y="152" font-size="10" fill="#8a897f">log_detector.v (top module)</text><rect x="14" y="168" width="58" height="40" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="43.0" y="186.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">A,B,C,D</text><text x="43.0" y="197.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">Vth</text><line x1="72" y1="188" x2="100" y2="188" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><rect x="100" y="170" width="48" height="36" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="124.0" y="186.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">input</text><text x="124.0" y="197.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">regs</text><line x1="148" y1="188" x2="178" y2="188" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="163.0" y="184.0" text-anchor="middle" font-size="9" fill="var(--muted)">Ar…Vr</text><rect x="178" y="168" width="60" height="44" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="178" y="168" width="3.5" height="44" rx="1.5" fill="var(--accent)"/><text x="208.0" y="188.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">lod5.v</text><text x="208.0" y="199.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">×5</text><line x1="238" y1="188" x2="268" y2="188" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="253.0" y="184.0" text-anchor="middle" font-size="9" fill="var(--muted)">e,f,z</text><rect x="268" y="170" width="68" height="40" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="302.0" y="188.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">L, X, Y</text><text x="302.0" y="199.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">(inline)</text><line x1="336" y1="188" x2="366" y2="188" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="351.0" y="184.0" text-anchor="middle" font-size="9" fill="var(--muted)">X,Y</text><rect x="366" y="164" width="110" height="52" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="366" y="164" width="3.5" height="52" rx="1.5" fill="var(--accent)"/><text x="421.0" y="182.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">lns_add.v</text><text x="421.0" y="193.5" text-anchor="middle" font-size="9.5" fill="var(--ink2)">+ lns_ftable.v</text><text x="421.0" y="204.5" text-anchor="middle" font-size="9.5" fill="var(--ink2)">s = max+F</text><line x1="476" y1="188" x2="506" y2="188" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="491.0" y="184.0" text-anchor="middle" font-size="9" fill="var(--muted)">s</text><rect x="506" y="170" width="80" height="40" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="546.0" y="188.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">compare</text><text x="546.0" y="199.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">+ out reg</text><line x1="586" y1="188" x2="618" y2="188" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="602.0" y="184.0" text-anchor="middle" font-size="9" fill="var(--muted)">out</text><rect x="618" y="175" width="52" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="644.0" y="191.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">out</text></svg><figcaption>The same flow at the <b>RTL level</b>: blocks ending in <code>.v</code> are actual source files and arrows carry the real signal names. The baseline is a single <code>mult_detector.v</code>; the multiplier-free design is <code>log_detector.v</code> (top) instantiating five <code>lod5.v</code> converters (A, B, C, D + Vth) and one <code>lns_add.v</code> — which instantiates the generated <code>lns_ftable.v</code> ROM. Input registers, L=&#123;e,f&#125;, X=La+Lb, the comparator and the output register are inline in the top module.</figcaption></figure>
 </section>
 
-<section class="bdsec">
+<section class="bdsec" id="datapath">
   <h2>Datapath — target use case (A·B − C·D) &gt; V<sub>th</sub></h2>
   <figure class="bd"><svg viewBox="0 0 520 284" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,Segoe UI,sans-serif"><defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 z" fill="var(--muted)"/></marker></defs><text x="14" y="22" font-size="12.5" font-weight="700" fill="var(--ink2)">① Multiplier — baseline</text><line x1="62" y1="53" x2="82" y2="53" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="62" y1="87" x2="82" y2="87" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="136" y1="53" x2="158" y2="64" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="147.0" y="49.0" text-anchor="middle" font-size="9" fill="var(--muted)">A·B</text><line x1="136" y1="87" x2="158" y2="78" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="147.0" y="74.0" text-anchor="middle" font-size="9" fill="var(--muted)">C·D</text><line x1="200" y1="71" x2="224" y2="71" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="212.0" y="67.0" text-anchor="middle" font-size="9" fill="var(--muted)">S±</text><line x1="296" y1="71" x2="322" y2="70" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><rect x="14" y="42" width="48" height="22" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="38.0" y="56.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">A, B</text><rect x="14" y="76" width="48" height="22" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="38.0" y="90.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">C, D</text><rect x="82" y="40" width="54" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="82" y="40" width="3.5" height="26" rx="1.5" fill="#e34948"/><text x="109.0" y="56.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">A × B</text><rect x="82" y="74" width="54" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="82" y="74" width="3.5" height="26" rx="1.5" fill="#e34948"/><text x="109.0" y="90.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">C × D</text><rect x="158" y="56" width="42" height="30" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="179.0" y="74.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">−</text><rect x="224" y="54" width="72" height="34" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="260.0" y="74.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">S &gt; Vth</text><rect x="322" y="57" width="52" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="348.0" y="73.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">out</text><text x="14" y="146" font-size="12.5" font-weight="700" fill="var(--ink2)">② Log / LNS, K=2</text><rect x="148" y="133" width="106" height="17" rx="8.5" fill="rgba(12,163,12,0.14)" stroke="#0ca30c" stroke-width="0.8"/><text x="201" y="145" text-anchor="middle" font-size="10" font-weight="600" fill="#0ca30c">✓ no × cells</text><line x1="44" y1="166.5" x2="52" y2="166.5" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="44" y1="191.5" x2="52" y2="191.5" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="44" y1="220.5" x2="52" y2="220.5" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="44" y1="245.5" x2="52" y2="245.5" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="104" y1="166.5" x2="124" y2="173" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="104" y1="191.5" x2="124" y2="186" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="104" y1="220.5" x2="124" y2="227" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="104" y1="245.5" x2="124" y2="240" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><line x1="156" y1="179" x2="346" y2="208" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="251.0" y="175.0" text-anchor="middle" font-size="9" fill="var(--muted)">x</text><line x1="156" y1="233" x2="190" y2="244" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="173.0" y="229.0" text-anchor="middle" font-size="9" fill="var(--muted)">y</text><line x1="336" y1="249" x2="346" y2="230" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><text x="341.0" y="226.0" text-anchor="middle" font-size="9" fill="var(--muted)">w</text><line x1="446" y1="218" x2="460" y2="218" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/><rect x="12" y="158" width="32" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="28.0" y="170.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">A</text><rect x="12" y="183" width="32" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="28.0" y="195.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">B</text><rect x="12" y="212" width="32" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="28.0" y="224.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">C</text><rect x="12" y="237" width="32" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="28.0" y="249.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">D</text><rect x="52" y="158" width="52" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="52" y="158" width="3.5" height="17" rx="1.5" fill="var(--accent)"/><text x="78.0" y="170.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">log₂·K2</text><rect x="52" y="183" width="52" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="52" y="183" width="3.5" height="17" rx="1.5" fill="var(--accent)"/><text x="78.0" y="195.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">log₂·K2</text><rect x="52" y="212" width="52" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="52" y="212" width="3.5" height="17" rx="1.5" fill="var(--accent)"/><text x="78.0" y="224.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">log₂·K2</text><rect x="52" y="237" width="52" height="17" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="52" y="237" width="3.5" height="17" rx="1.5" fill="var(--accent)"/><text x="78.0" y="249.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">log₂·K2</text><rect x="124" y="166" width="32" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="140.0" y="182.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">+</text><rect x="124" y="220" width="32" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="140.0" y="236.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">+</text><rect x="190" y="226" width="146" height="46" rx="6" fill="var(--surface)" stroke="var(--ring)"/><rect x="190" y="226" width="3.5" height="46" rx="1.5" fill="var(--accent)"/><text x="263.0" y="247.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">w-ROM (Vth baked in)</text><text x="263.0" y="258.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">w = log₂(2ʸ + Vth)</text><rect x="346" y="196" width="100" height="44" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="396.0" y="216.0" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">compare &gt;</text><text x="396.0" y="227.0" text-anchor="middle" font-size="9.5" fill="var(--ink2)">A·B &gt; C·D+Vth</text><rect x="460" y="205" width="50" height="26" rx="6" fill="var(--surface)" stroke="var(--ring)"/><text x="485.0" y="221.5" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)">out</text></svg><figcaption>V<sub>th</sub> is constant, so the max + F(|y−v|) LNS adder collapses into a single-input ROM w = log₂(2<sup>y</sup> + V<sub>th</sub>) — no max, no subtract, no runtime V<sub>th</sub> converter. Trade-off: the threshold is frozen into the ROM; reprogramming it means reloading the ROM.</figcaption></figure>
   <a class="callout" href="#lns-add-rom">
@@ -148,7 +171,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   </a>
 </section>
 
-<section>
+<section id="worked">
   <h2>Worked examples — where the approximation misjudges</h2>
   <p class="note">Real values through the implemented <code>(A·B + C·D) &gt; V<sub>th</sub></code>
   build (every number on this page is this add build). <b>Ŝ = 2<sup>s/4</sup></b> is the
@@ -214,7 +237,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   </div>
 </section>
 
-<section>
+<section id="sweep-add">
   <h2>RTL sweep — comparator output vs V<sub>th</sub> &nbsp;<span class="fn">A,B,C,D = 25,30,12,40</span></h2>
   <p class="note">Same worked-example inputs (exact A·B+C·D = <b>1230</b>), swept over
   V<sub>th</sub> = 60…6000 and driven through <b>both RTL designs in Icarus Verilog</b>
@@ -228,7 +251,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   agree. Everything else (area, power, ports) is unchanged — only the decision boundary moves.</p>
 </section>
 
-<section>
+<section id="sweep-sub">
   <h2>RTL sweep — the subtraction kernel &nbsp;<span class="fn">A·B − C·D &gt; V<sub>th</sub>, six operand sets</span></h2>
   <p class="note">Same idea for the <b>subtraction</b> kernel, from RTL simulation
   (<code>verif/tb_sweep_sub.v</code> drives <code>mult_sub.v</code> and <code>log_sub.v</code>; the
@@ -247,7 +270,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   flips early (under-estimate).</p>
 </section>
 
-<section>
+<section id="accuracy">
   <h2>Accuracy vs helper bits K &nbsp;<span class="fn">error as % of full-scale V<sub>th</sub></span></h2>
   <p class="note">The single accuracy knob is <b>K</b>, the number of mantissa (helper) bits each log
   converter keeps. With K fraction bits a log value is resolved to 2<sup>−K</sup>, so a product or
@@ -257,13 +280,18 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   <div class="tablescroll" style="display:inline-block;max-width:100%">
     <table class="ftab"><thead><tr>
       <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th><th>log resolution 2<sup>−K</sup></th>
-      <th>worst-case error<br>(% of full scale)</th><th>mean error</th></tr></thead>
-    <tbody><tr><td>0</td><td>1</td><td>1</td><td>50.0%</td><td>30.4%</td></tr><tr><td>1</td><td>2</td><td>0.5</td><td>33.2%</td><td>18.5%</td></tr><tr class="lit"><td>2</td><td>4</td><td>0.25</td><td>20.6%</td><td>11.5%</td></tr><tr><td>3</td><td>8</td><td>0.125</td><td>13.4%</td><td>7.7%</td></tr><tr><td>4</td><td>16</td><td>0.0625</td><td>9.7%</td><td>5.7%</td></tr></tbody></table>
+      <th>worst-case error<br>(% of full scale)</th><th>mean error</th>
+      <th>area vs multiplier<br>(sky130, synth)</th></tr></thead>
+    <tbody><tr><td>0</td><td>1</td><td>1</td><td>50.0%</td><td>30.4%</td><td>25.4%</td></tr><tr><td>1</td><td>2</td><td>0.5</td><td>33.2%</td><td>18.5%</td><td>35.3%</td></tr><tr class="lit"><td>2</td><td>4</td><td>0.25</td><td>20.6%</td><td>11.5%</td><td>42.6%</td></tr><tr><td>3</td><td>8</td><td>0.125</td><td>13.4%</td><td>7.7%</td><td>50.2%</td></tr><tr><td>4</td><td>16</td><td>0.0625</td><td>9.7%</td><td>5.7%</td><td>58.9%&nbsp;<sup>est</sup></td></tr></tbody></table>
   </div>
-  <p class="note">Each helper bit roughly cuts the error by a third (≈ ÷√2 per bit in ratio terms)
-  but adds one bit to every log bus and ROM address, so area/power climb with K. <b>K = 0</b> is
-  exponent-only — a factor-of-2 (one-octave) grid; <b>K = 2</b> holds the worst case near 20% while
-  keeping the F-ROM at just 6 gates. The row for this build is highlighted.</p>
+  <p class="note">The last column is the <b>real synthesized standard-cell area of the log design as a
+  percentage of the multiplier baseline</b> (8845.984 µm²) — each K re-synthesized to sky130 with
+  its own F-ROM (<code>scripts/area_vs_k.py</code>). Accuracy and area pull opposite ways: each helper
+  bit roughly cuts the error by a third but adds one bit to every log bus and ROM address, so area
+  climbs ~linearly (≈ +7–8 pts/bit) yet stays well under the multiplier through K = 4. <b>K = 0</b> is
+  exponent-only (a factor-of-2 grid, but a quarter the area); <b>K = 2</b> (this build, highlighted)
+  sits at ~20% worst-case error for ~43% of the multiplier's area. <sup>est</sup> = extrapolated
+  (the shared 8-bit buses synthesize cleanly only through K = 3).</p>
 </section>
 
 <section class="kpis">
@@ -273,7 +301,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   <div class="kpi"><div class="kv">0 → 2</div><div class="kl">multipliers → none</div><div class="ks">both verify PASS</div></div>
 </section>
 
-<section>
+<section id="comparison">
   <h2>Comparison</h2>
   <div class="tablescroll">
   <table>
@@ -297,7 +325,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--grid);color:v
   robust to those assumptions. OpenSTA was not available on this host.</p>
 </section>
 
-<section>
+<section id="die">
   <h2>Die size — standard-cell floorplan</h2>
   <p class="note">No P&amp;R tool (OpenROAD/Innovus) was available, so this is a
   <b>floorplan estimate</b>, not a routed layout: the real synthesized cells are packed
@@ -2247,7 +2275,7 @@ endmodule</pre></div>
   the three output bits <code>f[0..2]</code>; <code>f[3]</code> is tied low.</p>
 </section>
 
-<section>
+<section id="files">
   <h2>Files</h2>
   <p class="filehdr note"><a href="https://github.com/borenw/sky130-lns-mac-detector">Browse the repository ↗</a>
      <a href="https://github.com/borenw/sky130-lns-mac-detector/archive/refs/heads/main.zip">Download all (.zip) ↓</a></p>

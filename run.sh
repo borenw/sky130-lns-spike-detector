@@ -63,6 +63,9 @@ for n in synth/mult_detector_netlist.v synth/log_detector_netlist.v; do
     [ "$(grep -cE '^\s*\$' "$n")" -eq 0 ] || { echo "$n has \$-cells"; exit 1; }
 done
 
+echo "== Phase 5b: area vs K (re-synthesize log_detector for K=0..3) =="
+python3 scripts/area_vs_k.py
+
 echo "== Phase 6: power + area =="
 python3 model/power_area.py
 

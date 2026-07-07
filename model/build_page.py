@@ -753,7 +753,15 @@ def sweep_sub_plots():
                     for s in sorted(SWEEP_SUB))
     return '<div class="subgrid">%s</div>' % cards
 
-# ---- Accuracy vs helper bits K:  error of the K-bit log value, % of full-scale ----
+# ---- Accuracy vs helper bits K: error of the K-bit log value + real synth area vs mult ----
+def _area_vs_k():
+    try:
+        return {int(r["K"]): (r["pct_of_mult"], r["source"])
+                for r in read_csv(os.path.join(REPORT, "area_vs_k.csv"))}
+    except Exception:
+        return {}
+AREA_K = _area_vs_k()
+
 def k_error_table():
     body = []
     for K in range(0, 5):
@@ -769,9 +777,11 @@ def k_error_table():
             errs.append(abs(vhat - v) / v)                    # relative error
         mx = max(errs) * 100.0
         mean = sum(errs) / len(errs) * 100.0
+        apct, src = AREA_K.get(K, ("—", ""))
+        area_cell = ("%s%%" % apct) + ("&nbsp;<sup>est</sup>" if src == "estimate" else "")
         lit = ' class="lit"' if K == MODEL.K else ''
-        body.append('<tr%s><td>%d</td><td>%d</td><td>%.4g</td><td>%.1f%%</td><td>%.1f%%</td></tr>'
-                    % (lit, K, SC, 1.0 / SC, mx, mean))
+        body.append('<tr%s><td>%d</td><td>%d</td><td>%.4g</td><td>%.1f%%</td><td>%.1f%%</td>'
+                    '<td>%s</td></tr>' % (lit, K, SC, 1.0 / SC, mx, mean, area_cell))
     return "".join(body)
 
 # ---------------------------------------------------------------------------
@@ -795,12 +805,29 @@ PAGE = f"""<div class="wrap">
   </div>
 </header>
 
-<section class="bdsec">
+<nav class="toc">
+  <div class="tocg"><span class="tochdr">Jump to</span>
+    <a href="#rtl">RTL structure</a><a href="#datapath">Datapath</a>
+    <a href="#worked">Worked examples</a><a href="#sweep-add">Sweep A·B+C·D</a>
+    <a href="#sweep-sub">Sweep A·B−C·D</a><a href="#accuracy">Accuracy vs K</a>
+    <a href="#comparison">Comparison</a><a href="#die">Die size</a>
+    <a href="#f-rom-lut">Inside the LUT</a><a href="#files">Files</a></div>
+  <div class="tocg"><span class="tochdr">Top files — log / LNS</span>
+    <a href="{REPO_BLOB}/rtl/log_detector.v">RTL ↗</a>
+    <a href="{REPO_BLOB}/synth/log_detector_netlist.v">gate-level ↗</a>
+    <a href="{REPO_BLOB}/synth/log_detector.gds">GDS ↗</a></div>
+  <div class="tocg"><span class="tochdr">multiplier</span>
+    <a href="{REPO_BLOB}/rtl/mult_detector.v">RTL ↗</a>
+    <a href="{REPO_BLOB}/synth/mult_detector_netlist.v">gate-level ↗</a>
+    <a href="{REPO_BLOB}/synth/mult_detector.gds">GDS ↗</a></div>
+</nav>
+
+<section class="bdsec" id="rtl">
   <h2>RTL structure — modules &amp; signals</h2>
   {rtl_diagram()}
 </section>
 
-<section class="bdsec">
+<section class="bdsec" id="datapath">
   <h2>Datapath — target use case (A·B − C·D) &gt; V<sub>th</sub></h2>
   {block_diagram()}
   <a class="callout" href="#lns-add-rom">
@@ -812,7 +839,7 @@ PAGE = f"""<div class="wrap">
   </a>
 </section>
 
-<section>
+<section id="worked">
   <h2>Worked examples — where the approximation misjudges</h2>
   <p class="note">Real values through the implemented <code>(A·B + C·D) &gt; V<sub>th</sub></code>
   build (every number on this page is this add build). <b>Ŝ = 2<sup>s/{SCALE}</sup></b> is the
@@ -858,7 +885,7 @@ PAGE = f"""<div class="wrap">
   </div>
 </section>
 
-<section>
+<section id="sweep-add">
   <h2>RTL sweep — comparator output vs V<sub>th</sub> &nbsp;<span class="fn">A,B,C,D = 25,30,12,40</span></h2>
   <p class="note">Same worked-example inputs (exact A·B+C·D = <b>1230</b>), swept over
   V<sub>th</sub> = 60…6000 and driven through <b>both RTL designs in Icarus Verilog</b>
@@ -872,7 +899,7 @@ PAGE = f"""<div class="wrap">
   agree. Everything else (area, power, ports) is unchanged — only the decision boundary moves.</p>
 </section>
 
-<section>
+<section id="sweep-sub">
   <h2>RTL sweep — the subtraction kernel &nbsp;<span class="fn">A·B − C·D &gt; V<sub>th</sub>, six operand sets</span></h2>
   <p class="note">Same idea for the <b>subtraction</b> kernel, from RTL simulation
   (<code>verif/tb_sweep_sub.v</code> drives <code>mult_sub.v</code> and <code>log_sub.v</code>; the
@@ -891,7 +918,7 @@ PAGE = f"""<div class="wrap">
   flips early (under-estimate).</p>
 </section>
 
-<section>
+<section id="accuracy">
   <h2>Accuracy vs helper bits K &nbsp;<span class="fn">error as % of full-scale V<sub>th</sub></span></h2>
   <p class="note">The single accuracy knob is <b>K</b>, the number of mantissa (helper) bits each log
   converter keeps. With K fraction bits a log value is resolved to 2<sup>−K</sup>, so a product or
@@ -901,13 +928,18 @@ PAGE = f"""<div class="wrap">
   <div class="tablescroll" style="display:inline-block;max-width:100%">
     <table class="ftab"><thead><tr>
       <th>K &nbsp;(helper bits)</th><th>SCALE = 2<sup>K</sup></th><th>log resolution 2<sup>−K</sup></th>
-      <th>worst-case error<br>(% of full scale)</th><th>mean error</th></tr></thead>
+      <th>worst-case error<br>(% of full scale)</th><th>mean error</th>
+      <th>area vs multiplier<br>(sky130, synth)</th></tr></thead>
     <tbody>{k_error_table()}</tbody></table>
   </div>
-  <p class="note">Each helper bit roughly cuts the error by a third (≈ ÷√2 per bit in ratio terms)
-  but adds one bit to every log bus and ROM address, so area/power climb with K. <b>K = 0</b> is
-  exponent-only — a factor-of-2 (one-octave) grid; <b>K = {K}</b> holds the worst case near 20% while
-  keeping the F-ROM at just 6 gates. The row for this build is highlighted.</p>
+  <p class="note">The last column is the <b>real synthesized standard-cell area of the log design as a
+  percentage of the multiplier baseline</b> ({M['area_um2']} µm²) — each K re-synthesized to sky130 with
+  its own F-ROM (<code>scripts/area_vs_k.py</code>). Accuracy and area pull opposite ways: each helper
+  bit roughly cuts the error by a third but adds one bit to every log bus and ROM address, so area
+  climbs ~linearly (≈ +7–8 pts/bit) yet stays well under the multiplier through K = 4. <b>K = 0</b> is
+  exponent-only (a factor-of-2 grid, but a quarter the area); <b>K = {K}</b> (this build, highlighted)
+  sits at ~20% worst-case error for ~43% of the multiplier's area. <sup>est</sup> = extrapolated
+  (the shared 8-bit buses synthesize cleanly only through K = 3).</p>
 </section>
 
 <section class="kpis">
@@ -917,7 +949,7 @@ PAGE = f"""<div class="wrap">
   <div class="kpi"><div class="kv">0 → 2</div><div class="kl">multipliers → none</div><div class="ks">both verify PASS</div></div>
 </section>
 
-<section>
+<section id="comparison">
   <h2>Comparison</h2>
   <div class="tablescroll">
   <table>
@@ -933,7 +965,7 @@ PAGE = f"""<div class="wrap">
   robust to those assumptions. OpenSTA was not available on this host.</p>
 </section>
 
-<section>
+<section id="die">
   <h2>Die size — standard-cell floorplan</h2>
   <p class="note">No P&amp;R tool (OpenROAD/Innovus) was available, so this is a
   <b>floorplan estimate</b>, not a routed layout: the real synthesized cells are packed
@@ -1064,7 +1096,7 @@ PAGE = f"""<div class="wrap">
   the three output bits <code>f[0..2]</code>; <code>f[3]</code> is tied low.</p>
 </section>
 
-<section>
+<section id="files">
   <h2>Files</h2>
   <p class="filehdr note"><a href="{REPO}">Browse the repository ↗</a>
      <a href="{REPO_ZIP}">Download all (.zip) ↓</a></p>
@@ -1102,6 +1134,12 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;
 .rev{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);text-decoration:none;font-variant-numeric:tabular-nums;border:1px solid var(--ring);border-radius:20px;padding:3px 11px;white-space:nowrap}
 .rev:hover{border-color:var(--accent);color:var(--accent)}
 .revdot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;flex:0 0 auto}
+.toc{display:flex;flex-direction:column;gap:9px;margin:22px 0 6px;padding:13px 16px;background:var(--surface);border:1px solid var(--ring);border-radius:10px}
+.tocg{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.tochdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:118px}
+.toc a{font-size:13px;color:var(--accent);text-decoration:none;white-space:nowrap}
+.toc a:hover{text-decoration:underline}
+section[id]{scroll-margin-top:16px}
 h1{font-size:30px;line-height:1.2;margin:.25em 0 .3em}
 h2{font-size:20px;margin:0 0 .5em;padding-bottom:.35em;border-bottom:1px solid var(--grid)}
 .sub{color:var(--ink2);font-size:16px;max-width:70ch}
